@@ -26,6 +26,23 @@ import {
 
 const VISIBILITY_THRESHOLD = 0.5;
 
+// Phase-detection thresholds (normalised coordinate units per frame).
+// These were tuned empirically against typical 30fps MediaPipe output at 720p.
+/** Minimum wrist displacement per frame to classify as active preparation (not idle). */
+const WRIST_MOVEMENT_THRESHOLD = 0.005;
+/** Wrist dy per frame below which the wrist is considered to be rising rapidly → backswing. */
+const WRIST_RISING_THRESHOLD = -0.008;
+/** Minimum elbow angle change per frame (degrees) to detect extension → forward swing. */
+const ELBOW_EXTENSION_THRESHOLD = 2;
+/** Minimum wrist dy per frame to detect downward movement → follow-through. */
+const WRIST_FALLING_THRESHOLD = 0.005;
+
+// Lunge-detection thresholds.
+/** Normalised ankle spread (x-axis) above which a lunge is assumed for net-shot inference. */
+const LUNGE_ANKLE_SPREAD_THRESHOLD = 0.35;
+/** Minimum ankle Y-coordinate difference to resolve left/right forward foot without tie-breaking. */
+const ANKLE_Y_TIE_THRESHOLD = 0.02;
+
 function isVisible(lm: Landmark | undefined): lm is Landmark {
   return lm !== undefined && (lm.visibility ?? 1) >= VISIBILITY_THRESHOLD;
 }
@@ -87,28 +104,28 @@ export function detectPhase(
   // Classification tree
   if (!wristAboveShoulder) {
     // Wrist below shoulder level — preparation or idle
-    if (previousLandmarks && Math.abs(wristDy) > 0.005) {
+    if (previousLandmarks && Math.abs(wristDy) > WRIST_MOVEMENT_THRESHOLD) {
       return 'preparation'; // actively moving into position
     }
     return 'idle';
   }
 
   // Wrist above shoulder
-  if (wristDy < -0.008) {
+  if (wristDy < WRIST_RISING_THRESHOLD) {
     // Wrist still rising rapidly
     return 'backswing';
   }
 
-  if (elbowAngleDelta > 2) {
+  if (elbowAngleDelta > ELBOW_EXTENSION_THRESHOLD) {
     // Elbow extending (angle growing) — forward swing or contact
-    if (wristDy > 0.005) {
+    if (wristDy > WRIST_FALLING_THRESHOLD) {
       // Wrist now moving downward after peak — follow-through
       return 'follow_through';
     }
     return 'forward_swing';
   }
 
-  if (elbowAngleDelta < -2) {
+  if (elbowAngleDelta < -ELBOW_EXTENSION_THRESHOLD) {
     // Elbow re-flexing after peak extension — follow-through
     return 'follow_through';
   }
@@ -144,7 +161,7 @@ function inferShotMode(
   // Net shot: wrist is relatively low AND there is a visible lunge (wide ankle spread)
   if (isVisible(lAnkle) && isVisible(rAnkle)) {
     const ankleSpread = Math.abs(lAnkle.x - rAnkle.x);
-    const isLunging   = ankleSpread > 0.35; // rough normalised threshold
+    const isLunging   = ankleSpread > LUNGE_ANKLE_SPREAD_THRESHOLD;
     if (isLunging && wrist.y >= shoulder.y) {
       return 'net';
     }
@@ -397,7 +414,7 @@ export function computeFeedback(
       leftIsForward = lAnkle.x < rAnkle.x;
     } else {
       // Front-view: use Y coordinates but resolve ties with hip displacement
-      if (Math.abs(lAnkle.y - rAnkle.y) > 0.02) {
+      if (Math.abs(lAnkle.y - rAnkle.y) > ANKLE_Y_TIE_THRESHOLD) {
         leftIsForward = lAnkle.y < rAnkle.y;
       } else {
         // Tie-breaker: whichever hip is displaced further forward (lower y)
