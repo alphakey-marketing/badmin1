@@ -15,17 +15,28 @@ export const LEFT_ANKLE = 27;
 export const RIGHT_ANKLE = 28;
 
 /**
- * Compute the angle (in degrees) at vertex p2 formed by the p1–p2–p3 segments.
+ * Compute the signed angle (in degrees) at vertex p2 formed by the p1–p2–p3 segments.
+ * Returns values in the range (−180, 180].
+ * Sign indicates the direction of turn: positive = counter-clockwise (p3 is to the left of p1),
+ * negative = clockwise (p3 is to the right of p1).
+ * Use this when the direction of the bend matters (e.g. elbow bending forward vs. backward).
  */
 export function angle3Points(p1: Landmark, p2: Landmark, p3: Landmark): number {
   const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
   const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
   const dot = v1.x * v2.x + v1.y * v2.y;
-  const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-  const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-  if (mag1 === 0 || mag2 === 0) return 0;
-  const cosAngle = Math.max(-1, Math.min(1, dot / (mag1 * mag2)));
-  return (Math.acos(cosAngle) * 180) / Math.PI;
+  const cross = v1.x * v2.y - v1.y * v2.x;
+  return Math.atan2(cross, dot) * 180 / Math.PI;
+}
+
+/**
+ * Compute the absolute (unsigned) angle (in degrees) at vertex p2.
+ * Returns values in the range [0, 180].
+ * Use this when only the magnitude of the bend matters and direction is irrelevant
+ * (e.g. stance width heuristics, knee flexion symmetry checks).
+ */
+export function absAngle3Points(p1: Landmark, p2: Landmark, p3: Landmark): number {
+  return Math.abs(angle3Points(p1, p2, p3));
 }
 
 /**

@@ -7,23 +7,7 @@ import FeedbackDisplay from './components/FeedbackDisplay';
 import DebugPanel from './components/DebugPanel';
 import CameraGuideCard from './components/CameraGuideCard';
 import CameraControls from './components/CameraControls';
-import type { CalibrationData, FeedbackResult, RacketHand } from './types';
-
-// Joints to highlight depending on feedback keywords
-function getProblemJoints(message: string): Set<number> {
-  const joints = new Set<number>();
-  const m = message.toLowerCase();
-  if (m.includes('elbow')) {
-    joints.add(13); joints.add(14); joints.add(15); joints.add(16);
-  }
-  if (m.includes('lunge') || m.includes('knee')) {
-    joints.add(25); joints.add(26); joints.add(27); joints.add(28);
-  }
-  if (m.includes('stance')) {
-    joints.add(27); joints.add(28); joints.add(23); joints.add(24);
-  }
-  return joints;
-}
+import type { CalibrationData, FeedbackResult, RacketHand, ShotMode, CameraAngle, Landmark } from './types';
 
 export default function App() {
   const { videoRef, cameraFacing, toggleCamera, error, isLoading } = useCamera();
@@ -34,8 +18,11 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [showGuide, setShowGuide] = useState(true);
   const [racketHand, setRacketHand] = useState<RacketHand>('right');
+  const [shotMode, setShotMode] = useState<ShotMode>('auto');
+  const [cameraAngle, setCameraAngle] = useState<CameraAngle>('front');
   const [calibration, setCalibration] = useState<CalibrationData | null>(null);
   const feedbackRafRef = useRef<number | null>(null);
+  const previousLandmarksRef = useRef<Landmark[] | null>(null);
 
   // Run feedback engine on each new landmarks frame
   useEffect(() => {
@@ -45,13 +32,21 @@ export default function App() {
     }
     if (feedbackRafRef.current) cancelAnimationFrame(feedbackRafRef.current);
     feedbackRafRef.current = requestAnimationFrame(() => {
-      const result = computeFeedback(landmarks, racketHand);
+      const result = computeFeedback(
+        landmarks,
+        racketHand,
+        shotMode,
+        previousLandmarksRef.current,
+        calibration,
+        cameraAngle,
+      );
+      previousLandmarksRef.current = landmarks;
       setFeedback(result);
     });
     return () => {
       if (feedbackRafRef.current) cancelAnimationFrame(feedbackRafRef.current);
     };
-  }, [landmarks, racketHand]);
+  }, [landmarks, racketHand, shotMode, calibration, cameraAngle]);
 
   const handleCalibrate = useCallback(() => {
     if (landmarks) {
@@ -63,7 +58,9 @@ export default function App() {
     setIsVideoReady(true);
   }, []);
 
-  const problemJoints = feedback ? getProblemJoints(feedback.message) : new Set<number>();
+  const problemJoints = feedback
+    ? new Set<number>(feedback.problemJoints)
+    : new Set<number>();
 
   return (
     <div
@@ -156,6 +153,10 @@ export default function App() {
             onToggleCamera={toggleCamera}
             racketHand={racketHand}
             onSetRacketHand={setRacketHand}
+            shotMode={shotMode}
+            onSetShotMode={setShotMode}
+            cameraAngle={cameraAngle}
+            onSetCameraAngle={setCameraAngle}
             onCalibrate={handleCalibrate}
             onResetCalibration={() => setCalibration(null)}
             hasCalibration={calibration !== null}

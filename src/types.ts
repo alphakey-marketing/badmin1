@@ -12,6 +12,12 @@ export type Severity = 'good' | 'warning' | 'error';
 /** Racket hand preference */
 export type RacketHand = 'left' | 'right';
 
+/** Shot mode for targeted coaching */
+export type ShotMode = 'smash' | 'clear' | 'drop' | 'net' | 'auto';
+
+/** Camera angle relative to the player */
+export type CameraAngle = 'front' | 'side';
+
 /** Debug metrics computed from pose */
 export interface PoseMetrics {
   leftElbowAngle: number | null;
@@ -26,6 +32,8 @@ export interface FeedbackResult {
   message: string;
   severity: Severity;
   details: PoseMetrics;
+  /** MediaPipe landmark indices that should be highlighted in the skeleton overlay. */
+  problemJoints: number[];
 }
 
 /** Calibration baseline pose */

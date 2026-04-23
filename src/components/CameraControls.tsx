@@ -1,10 +1,14 @@
-import type { RacketHand } from '../types';
+import type { RacketHand, ShotMode, CameraAngle } from '../types';
 
 interface Props {
   cameraFacing: 'user' | 'environment';
   onToggleCamera: () => void;
   racketHand: RacketHand;
   onSetRacketHand: (h: RacketHand) => void;
+  shotMode: ShotMode;
+  onSetShotMode: (m: ShotMode) => void;
+  cameraAngle: CameraAngle;
+  onSetCameraAngle: (a: CameraAngle) => void;
   onCalibrate: () => void;
   onResetCalibration: () => void;
   hasCalibration: boolean;
@@ -23,11 +27,24 @@ const btnStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+const selectStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: '#e2e8f0',
+  fontSize: 13,
+  cursor: 'pointer',
+  outline: 'none',
+};
+
 export default function CameraControls({
   cameraFacing,
   onToggleCamera,
   racketHand,
   onSetRacketHand,
+  shotMode,
+  onSetShotMode,
+  cameraAngle,
+  onSetCameraAngle,
   onCalibrate,
   onResetCalibration,
   hasCalibration,
@@ -53,30 +70,44 @@ export default function CameraControls({
       </button>
 
       {/* Racket hand selector */}
-      <div
-        style={{
-          ...btnStyle,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '4px 8px',
-        }}
-      >
+      <div style={{ ...btnStyle, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' }}>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>Racket:</span>
         <select
           value={racketHand}
           onChange={(e) => onSetRacketHand(e.target.value as RacketHand)}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: '#e2e8f0',
-            fontSize: 13,
-            cursor: 'pointer',
-            outline: 'none',
-          }}
+          style={selectStyle}
         >
           <option value="right" style={{ background: '#1e1e3c' }}>Right hand</option>
-          <option value="left" style={{ background: '#1e1e3c' }}>Left hand</option>
+          <option value="left"  style={{ background: '#1e1e3c' }}>Left hand</option>
+        </select>
+      </div>
+
+      {/* Shot mode selector */}
+      <div style={{ ...btnStyle, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Shot:</span>
+        <select
+          value={shotMode}
+          onChange={(e) => onSetShotMode(e.target.value as ShotMode)}
+          style={selectStyle}
+        >
+          <option value="auto"  style={{ background: '#1e1e3c' }}>Auto-detect</option>
+          <option value="smash" style={{ background: '#1e1e3c' }}>Smash</option>
+          <option value="clear" style={{ background: '#1e1e3c' }}>Clear</option>
+          <option value="drop"  style={{ background: '#1e1e3c' }}>Drop</option>
+          <option value="net"   style={{ background: '#1e1e3c' }}>Net shot</option>
+        </select>
+      </div>
+
+      {/* Camera angle selector */}
+      <div style={{ ...btnStyle, display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px' }}>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>View:</span>
+        <select
+          value={cameraAngle}
+          onChange={(e) => onSetCameraAngle(e.target.value as CameraAngle)}
+          style={selectStyle}
+        >
+          <option value="front" style={{ background: '#1e1e3c' }}>Front view</option>
+          <option value="side"  style={{ background: '#1e1e3c' }}>Side view</option>
         </select>
       </div>
 
