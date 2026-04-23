@@ -225,7 +225,7 @@ export default function App() {
               fontWeight: 600,
             }}
           >
-            {isInitialized ? '● Live' : '○ Initialising'}
+            {isInitialized ? '● Live' : '○ Initializing'}
           </span>
         </div>
       </div>

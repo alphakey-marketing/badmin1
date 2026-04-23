@@ -100,7 +100,9 @@ export function computeFeedback(
   }
 
   // Knee angle check (front knee during lunge)
-  // Detect lunge by checking which ankle is more forward (lower y value = higher in frame = in front)
+  // Detect lunge by checking which ankle is more forward (lower y value = higher in frame = in front).
+  // This heuristic assumes a front-facing or slight side-angle camera; it is less reliable from a
+  // pure side view where both ankles have similar y coordinates.
   let frontKneeAngle: number | null = null;
   if (isVisible(lAnkle) && isVisible(rAnkle)) {
     frontKneeAngle =

@@ -9,6 +9,8 @@ const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 const SMOOTH_ALPHA = 0.6;
+// Number of frames kept in the rolling average buffer.
+// 4 frames balances smoothness (reduces jitter) while keeping sub-200 ms lag at 30+ fps.
 const HISTORY_SIZE = 4;
 
 interface UsePoseLandmarkerReturn {
