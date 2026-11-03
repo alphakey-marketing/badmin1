@@ -409,3 +409,42 @@ export const DROP: PostureReference = {
  *   - Tumble net shot requires significantly higher wrist flexion + ulnar flex + pronation velocity
  *   - Shoulder movement is NOT the power source for net shots; it is the distal wrist/forearm [web:69]
  *   - Forehand lunge: hip
+ *     and knee flexion carry the body to the net; racket arm stays relaxed [web:69]
+ */
+export const NET_SHOT: PostureReference = {
+  name: 'Forehand Net Shot (Dab / Tumble)',
+  coachingNote:
+    'Power for a net shot comes from the forearm and wrist, not the shoulder. ' +
+    'Lunge with the racket-side leg, keep the racket head up, and touch the shuttle ' +
+    'early with a relaxed grip. For a tumble net, brush across the cork to make it spin.',
+  phases: {
+    contact: {
+      racketElbow: {
+        min: 130,
+        max: 155,
+        description: 'Elbow ~139–142° at contact for both dab and tumble net shots. [web:69]',
+      },
+      racketShoulderElevation: {
+        min: 60,
+        max: 110,
+        description: 'Arm reaches forward at about shoulder height; no big overhead swing. [web:69]',
+      },
+    },
+  },
+  lowerBody: {
+    kneeFlexion: {
+      min: 85,
+      max: 120,
+      description: 'Front knee deeply bent (~90–110°) in the forecourt lunge; knee over the toes. [web:73]',
+    },
+    stanceWidthRatio: {
+      min: 1.6,
+      max: 3.0,
+      description: 'Long lunge base: front foot far ahead, rear leg extended behind. [web:73]',
+    },
+    forefootContact: false,
+    description: 'Heel-first landing on the front foot, then push back to base. [web:73]',
+  },
+};
+
+export const ALL_REFERENCES = { SMASH, CLEAR, DROP, NET_SHOT };
