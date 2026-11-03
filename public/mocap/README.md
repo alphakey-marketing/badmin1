@@ -6,7 +6,7 @@ Files here use the `badmin1-mocap-v1` format (21 joints, metres, y up, swing tow
 ## Import MultiSenseBadminton (forehand clear + backhand drive)
 
 Dataset: Seong et al. (2024), *MultiSenseBadminton: Wearable Sensor–Based Biomechanical Dataset for
-Evaluation of Badminton Performance*, Scientific Data. Licence **CC BY 4.0** (credit the authors).
+Evaluation of Badminton Performance*, Scientific Data. The figshare record is licensed **CC0** (the paper states CC BY 4.0); please credit the authors.
 25 players (12 novice, 8 intermediate, 5 expert), Perception Neuron Studio IMU suit.
 
 1. Download the HDF5 files from figshare: https://doi.org/10.6084/m9.figshare.c.6725706.v1

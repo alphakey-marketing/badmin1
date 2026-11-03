@@ -1,0 +1,154 @@
+[
+  {
+    "stroke": "clear",
+    "file": "clear.json",
+    "subject": "Sub24",
+    "skill": "Expert",
+    "count": 761,
+    "subjects": [
+      "Sub11",
+      "Sub14",
+      "Sub19",
+      "Sub20",
+      "Sub24"
+    ],
+    "stats": {
+      "elbowAtSpeedPeak": {
+        "median": 148.5,
+        "q1": 135.8,
+        "q3": 160.1,
+        "perSubject": {
+          "Sub11": 135.1,
+          "Sub14": 142.4,
+          "Sub19": 165.3,
+          "Sub20": 148.5,
+          "Sub24": 154.9
+        }
+      },
+      "elbowMaxNearContact": {
+        "median": 167.4,
+        "q1": 154.3,
+        "q3": 174.3,
+        "perSubject": {
+          "Sub11": 174.8,
+          "Sub14": 150.6,
+          "Sub19": 174.8,
+          "Sub20": 159.8,
+          "Sub24": 167.9
+        }
+      },
+      "minRacketKneeBefore": {
+        "median": 139.4,
+        "q1": 132.1,
+        "q3": 146.2,
+        "perSubject": {
+          "Sub11": 128.7,
+          "Sub14": 145.3,
+          "Sub19": 148.8,
+          "Sub20": 139.2,
+          "Sub24": 132.6
+        }
+      },
+      "minOtherKneeBefore": {
+        "median": 146.1,
+        "q1": 133.9,
+        "q3": 156.9,
+        "perSubject": {
+          "Sub11": 137.0,
+          "Sub14": 131.6,
+          "Sub19": 146.9,
+          "Sub20": 163.1,
+          "Sub24": 155.2
+        }
+      },
+      "peakHandSpeed": {
+        "median": 9.8,
+        "q1": 7.7,
+        "q3": 11.8,
+        "perSubject": {
+          "Sub11": 8.1,
+          "Sub14": 13.0,
+          "Sub19": 11.1,
+          "Sub20": 6.5,
+          "Sub24": 10.2
+        }
+      }
+    }
+  },
+  {
+    "stroke": "backhandDrive",
+    "file": "backhandDrive.json",
+    "subject": "Sub24",
+    "skill": "Expert",
+    "count": 684,
+    "subjects": [
+      "Sub11",
+      "Sub14",
+      "Sub19",
+      "Sub20",
+      "Sub24"
+    ],
+    "stats": {
+      "elbowAtSpeedPeak": {
+        "median": 128.0,
+        "q1": 113.9,
+        "q3": 153.1,
+        "perSubject": {
+          "Sub11": 115.5,
+          "Sub14": 105.9,
+          "Sub19": 133.1,
+          "Sub20": 172.4,
+          "Sub24": 148.6
+        }
+      },
+      "elbowMaxNearContact": {
+        "median": 157.9,
+        "q1": 146.2,
+        "q3": 167.9,
+        "perSubject": {
+          "Sub11": 134.8,
+          "Sub14": 151.4,
+          "Sub19": 166.7,
+          "Sub20": 177.0,
+          "Sub24": 159.2
+        }
+      },
+      "minRacketKneeBefore": {
+        "median": 143.2,
+        "q1": 132.2,
+        "q3": 152.1,
+        "perSubject": {
+          "Sub11": 132.1,
+          "Sub14": 161.0,
+          "Sub19": 135.9,
+          "Sub20": 130.5,
+          "Sub24": 149.3
+        }
+      },
+      "minOtherKneeBefore": {
+        "median": 147.6,
+        "q1": 130.5,
+        "q3": 164.8,
+        "perSubject": {
+          "Sub11": 121.9,
+          "Sub14": 161.0,
+          "Sub19": 135.5,
+          "Sub20": 146.7,
+          "Sub24": 172.9
+        }
+      },
+      "peakHandSpeed": {
+        "median": 4.1,
+        "q1": 3.5,
+        "q3": 5.5,
+        "perSubject": {
+          "Sub11": 5.0,
+          "Sub14": 6.3,
+          "Sub19": 3.3,
+          "Sub20": 3.7,
+          "Sub24": 3.7
+        }
+      }
+    }
+  }
+]

@@ -45,7 +45,7 @@ Checked against published research: exit speed ≈ 1.35–1.5 × racket-head spe
 ### Realistic model and motion capture
 
 - The demo and the physics lab use a realistic skinned human model (`public/models/michelle.glb`, Mixamo skeleton) driven by the validated joint positions (`src/demo/humanModel.ts`). A simple mannequin is still available and is used as a fallback.
-- Real motion capture: `scripts/mocap/extract_multisense.py` converts the MultiSenseBadminton dataset (CC BY 4.0, forehand clear and backhand drive) into clips the demo can play, with real-vs-demo angle checks. See `public/mocap/README.md`.
+- Real motion capture: `scripts/mocap/extract_multisense.py` converts the MultiSenseBadminton dataset (figshare CC0; paper CC BY 4.0; forehand clear and backhand drive) into clips the demo can play. Imported: the 5 experts (Sub11, Sub14, Sub19, Sub20, Sub24), 761 clears and 684 backhand drives; `public/mocap/index.json` holds their median/IQR angles, and the demo's clear and backhand drive were calibrated to sit inside the experts' middle 50%. See `public/mocap/README.md`.
 - The coach tab can record a move from camera/video into the same clip format.
 
 ## Getting started

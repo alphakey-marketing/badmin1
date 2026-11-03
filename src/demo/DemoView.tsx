@@ -264,14 +264,27 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
   const compare = useMemo(() => {
     if (!clip) return null;
     const cs = clipSummary(clip);
-    let demoKnee = 180;
-    let demoElbow: number | null = null;
+    // Demo measured exactly like the importer: straightest elbow 0.3 s before → 0.15 s after contact,
+    // deepest knees in the 0.4 s before contact (loading phase).
+    let demo: { elbow: number; kneeR: number; kneeL: number } | null = null;
     if (move.contactT !== undefined) {
-      for (let tt = 0; tt <= move.contactT; tt += 0.02) demoKnee = Math.min(demoKnee, measure(poseAt(move.keys, tt)).kneeR);
-      demoElbow = measure(poseAt(move.keys, move.contactT)).elbowR;
+      const c = move.contactT;
+      let elbow = 0;
+      let kneeR = 180;
+      let kneeL = 180;
+      for (let tt = Math.max(0, c - 0.4); tt <= c + 0.15; tt += 0.01) {
+        const m = measure(poseAt(move.keys, tt));
+        if (tt >= c - 0.3) elbow = Math.max(elbow, m.elbowR);
+        if (tt <= c) {
+          kneeR = Math.min(kneeR, m.kneeR);
+          kneeL = Math.min(kneeL, m.kneeL);
+        }
+      }
+      demo = { elbow, kneeR, kneeL };
     }
-    return { cs, demoKnee: move.contactT !== undefined ? demoKnee : null, demoElbow };
-  }, [clip, move]);
+    const entry = mocapIndex.find((e) => e.stroke === move.id && clip.source.startsWith('MultiSense'));
+    return { cs, demo, entry };
+  }, [clip, move, mocapIndex]);
 
   // Footprints + racket-head path for this move
   useEffect(() => {
@@ -448,20 +461,37 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
             🎥 <b>真人動作捕捉</b>：{clip.source}（{clip.license}）{clip.subject ? ` · ${clip.subject}` : ''}{clip.skill ? ` · ${clip.skill}` : ''} · {clip.hand === 'right' ? '右手' : '左手'} · {clip.frames.length} 幀 @ {clip.fps} fps
             {clip.url && <> · <a href={clip.url} target="_blank" rel="noreferrer">數據來源</a></>}
           </span>
-          {compare && (
+          {compare?.entry?.stats && compare.demo ? (
             <>
-              <div className="demo-check ok">
-                <span>擊球時手肘</span>
-                <b>真人 {compare.cs.elbowAtContact.toFixed(0)}°</b>
-                <span className="muted">示範 {compare.demoElbow !== null ? `${compare.demoElbow.toFixed(0)}°` : '—'}</span>
-              </div>
-              <div className="demo-check ok">
-                <span>擊球前最屈膝頭（持拍側）</span>
-                <b>真人 {compare.cs.minKneeR.toFixed(0)}°</b>
-                <span className="muted">示範 {compare.demoKnee !== null ? `${compare.demoKnee.toFixed(0)}°` : '—'}</span>
-              </div>
+              <span className="muted small">
+                專家數據：{compare.entry.subjects?.length ?? 5} 位專家、{compare.entry.count} 次擊球（中位數，括號＝中間 50%）vs 示範動畫：
+              </span>
+              {(
+                [
+                  ['擊球前後最伸直嘅手肘', 'elbowMaxNearContact', compare.demo.elbow],
+                  ['擊球前 0.4 秒內最屈嘅持拍側膝頭', 'minRacketKneeBefore', compare.demo.kneeR],
+                  ['擊球前 0.4 秒內最屈嘅另一邊膝頭', 'minOtherKneeBefore', compare.demo.kneeL],
+                ] as const
+              ).map(([label, key, demoVal]) => {
+                const st = compare.entry?.stats?.[key];
+                if (!st) return null;
+                const ok = demoVal >= st.q1 - 3 && demoVal <= st.q3 + 3;
+                return (
+                  <div key={key} className={`demo-check ${ok ? 'ok' : 'bad'}`}>
+                    <span>{ok ? '✓' : '△'} {label}</span>
+                    <b>專家 {st.median.toFixed(0)}°（{st.q1.toFixed(0)}–{st.q3.toFixed(0)}°）</b>
+                    <span className="muted">示範 {demoVal.toFixed(0)}°</span>
+                  </div>
+                );
+              })}
             </>
-          )}
+          ) : compare ? (
+            <div className="demo-check ok">
+              <span>呢段動作</span>
+              <b>擊球時手肘 {compare.cs.elbowAtContact.toFixed(0)}° · 最屈膝頭 {compare.cs.minKneeR.toFixed(0)}°</b>
+              {compare.demo && <span className="muted">示範：手肘 {compare.demo.elbow.toFixed(0)}° · 膝頭 {compare.demo.kneeR.toFixed(0)}°</span>}
+            </div>
+          ) : null}
           <span className="muted tiny">動作捕捉衣只記錄身體關節，冇記錄球拍同腳趾：球拍方向同腳尖係估算嘅。擊球時間 = 持拍手（相對髖部）最快嗰一刻。</span>
         </div>
       )}
