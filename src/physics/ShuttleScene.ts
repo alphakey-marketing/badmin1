@@ -5,8 +5,29 @@
  */
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createShuttle } from './shuttleModel';
+import { createRacket, createShuttle } from './shuttleModel';
 import { COURT, sampleAt, type SimResult } from './shuttleSim';
+
+/** What the scene needs to draw the racket hit (impact mode). */
+export interface ImpactView {
+  contact: THREE.Vector3;
+  incoming: Array<{ t: number; pos: THREE.Vector3; vel: THREE.Vector3 }>;
+  vRacket: THREE.Vector3;
+  normal: THREE.Vector3;
+}
+
+interface State {
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  quat: THREE.Quaternion;
+  axis: THREE.Vector3;
+  drag: THREE.Vector3;
+  side: THREE.Vector3;
+  gravity: THREE.Vector3;
+}
+
+const SWING_RADIUS = 0.9; // shoulder → racket head, metres
+const UPV = new THREE.Vector3(0, 1, 0);
 
 export interface SceneOptions {
   showForces: boolean;
@@ -44,6 +65,14 @@ export class ShuttleScene {
   private closeArrows: Record<'flow' | 'axis', THREE.ArrowHelper>;
   private flowLines: THREE.LineSegments;
   private flowOffsets: Float32Array;
+
+  private racket: THREE.Group;
+  private closeRacket: THREE.Group;
+  private incomingLine: THREE.Line | null = null;
+  private impact: ImpactView | null = null;
+  private impactArrows: Record<'face' | 'swing', THREE.ArrowHelper>;
+  private closeImpactArrows: Record<'face' | 'swing', THREE.ArrowHelper>;
+  private racketKin: { pivot: THREE.Vector3; rho: THREE.Vector3; axis: THREE.Vector3; omega: THREE.Vector3; q0: THREE.Quaternion; linear: boolean } | null = null;
 
   private result: SimResult | null = null;
   private ghost: SimResult | null = null;
@@ -128,6 +157,21 @@ export class ShuttleScene {
     );
     this.closeScene.add(this.flowLines);
 
+    this.racket = createRacket();
+    this.racket.visible = false;
+    this.scene.add(this.racket);
+    this.closeRacket = createRacket();
+    this.closeRacket.visible = false;
+    this.closeScene.add(this.closeRacket);
+    const mkImpact = (c: number, sc: THREE.Scene, len: number, head: number) => {
+      const a = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), len, c, head, head * 0.6);
+      a.visible = false;
+      sc.add(a);
+      return a;
+    };
+    this.impactArrows = { face: mkImpact(0x4ade80, this.scene, 0.8, 0.12), swing: mkImpact(0xfb923c, this.scene, 0.8, 0.12) };
+    this.closeImpactArrows = { face: mkImpact(0x4ade80, this.closeScene, 0.1, 0.018), swing: mkImpact(0xfb923c, this.closeScene, 0.1, 0.018) };
+
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(container);
     this.resize();
@@ -206,9 +250,11 @@ export class ShuttleScene {
     }
   }
 
-  setResults(result: SimResult, ghost: SimResult | null) {
+  setResults(result: SimResult, ghost: SimResult | null, impact: ImpactView | null = null) {
     this.result = result;
     this.ghost = ghost;
+    this.impact = impact;
+    this.setupRacket();
     const mkLine = (res: SimResult, color: number, dashed: boolean) => {
       const pts = res.samples.filter((_, i) => i % 4 === 0).map((s) => s.pos);
       pts.push(res.samples[res.samples.length - 1].pos);
@@ -231,6 +277,22 @@ export class ShuttleScene {
     this.scene.add(this.pathLine);
     this.ghostLine = ghost ? mkLine(ghost, COLORS.ghost, true) : null;
     if (this.ghostLine) this.scene.add(this.ghostLine);
+
+    if (this.incomingLine) {
+      this.scene.remove(this.incomingLine);
+      this.incomingLine.geometry.dispose();
+      (this.incomingLine.material as THREE.Material).dispose();
+      this.incomingLine = null;
+    }
+    if (impact && impact.incoming.length > 1) {
+      const g = new THREE.BufferGeometry().setFromPoints(impact.incoming.map((p) => p.pos));
+      this.incomingLine = new THREE.Line(
+        g,
+        new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.1, gapSize: 0.08 }),
+      );
+      this.incomingLine.computeLineDistances();
+      this.scene.add(this.incomingLine);
+    }
 
     this.landingMarkers.clear();
     const addMark = (res: SimResult, color: number) => {
@@ -257,7 +319,7 @@ export class ShuttleScene {
     this.time = t;
     const res = this.result;
     if (!res) return;
-    const s = sampleAt(res, t);
+    const s = this.stateAt(t);
     this.shuttle.position.copy(s.pos);
     this.shuttle.quaternion.copy(s.quat);
     this.shuttle.scale.setScalar(this.opts.shuttleScale);
@@ -265,7 +327,7 @@ export class ShuttleScene {
 
     if (this.ghost) {
       this.ghostMarker.visible = true;
-      this.ghostMarker.position.copy(sampleAt(this.ghost, t).pos);
+      this.ghostMarker.position.copy(t < 0 ? s.pos : sampleAt(this.ghost, t).pos);
     } else {
       this.ghostMarker.visible = false;
     }
@@ -302,6 +364,8 @@ export class ShuttleScene {
     this.closeCamera.position.copy(sideDir.multiplyScalar(0.32)).add(new THREE.Vector3(0, 0.08, 0)).addScaledVector(vdir, -0.05);
     this.closeCamera.lookAt(0, -0.02, 0);
 
+    this.updateRacket(t, s.pos);
+
     if (this.opts.follow) {
       const target = s.pos.clone();
       const delta = target.clone().sub(this.controls.target);
@@ -313,7 +377,7 @@ export class ShuttleScene {
   private updateFlow(dtReal: number) {
     const res = this.result;
     if (!res) return;
-    const s = sampleAt(res, this.time);
+    const s = this.stateAt(this.time);
     const vdir = s.vel.clone().normalize();
     const u = new THREE.Vector3().crossVectors(vdir, new THREE.Vector3(0, 1, 0));
     if (u.lengthSq() < 1e-4) u.set(0, 0, 1);
@@ -334,6 +398,111 @@ export class ShuttleScene {
     }
     pos.needsUpdate = true;
     this.flowLines.visible = this.opts.showForces;
+  }
+
+  /** Shuttle state at time t (t < 0 = still flying in, before the hit). */
+  private stateAt(t: number): State {
+    const imp = this.impact;
+    if (t < 0 && imp && imp.incoming.length) {
+      const pts = imp.incoming;
+      const i = Math.max(0, Math.min(pts.length - 1, Math.round((t - pts[0].t) / 0.001)));
+      const p = pts[i];
+      const v = p.vel;
+      return {
+        pos: p.pos,
+        vel: v,
+        quat: new THREE.Quaternion().setFromUnitVectors(UPV, v.clone().normalize()),
+        axis: v.clone().normalize(),
+        drag: v.clone().normalize().multiplyScalar(-9.81 * (v.lengthSq() / (6.78 * 6.78))),
+        side: new THREE.Vector3(),
+        gravity: new THREE.Vector3(0, -9.81, 0),
+      };
+    }
+    const s = sampleAt(this.result as SimResult, Math.max(0, t));
+    return s;
+  }
+
+  /** Racket swings on an arc around the shoulder and passes through the contact point at t = 0. */
+  private setupRacket() {
+    const imp = this.impact;
+    this.racket.visible = !!imp;
+    this.closeRacket.visible = !!imp;
+    if (!imp) {
+      this.racketKin = null;
+      Object.values(this.impactArrows).forEach((a) => (a.visible = false));
+      Object.values(this.closeImpactArrows).forEach((a) => (a.visible = false));
+      return;
+    }
+    const N = imp.normal.clone().normalize();
+    const speed = imp.vRacket.length();
+    const vhat = speed > 1e-6 ? imp.vRacket.clone().normalize() : UPV.clone();
+    // Shaft lies in the string plane: choose rho ⟂ N and ⟂ swing direction, pointing upwards.
+    let rho = new THREE.Vector3().crossVectors(N, vhat);
+    if (rho.lengthSq() < 1e-4) rho = UPV.clone().addScaledVector(vhat, -UPV.dot(vhat));
+    if (rho.lengthSq() < 1e-4) rho.set(0, 0, 1);
+    rho.normalize();
+    if (rho.y < 0) rho.negate();
+    const axis = new THREE.Vector3().crossVectors(rho, vhat).normalize();
+    const zAxis = N.clone().addScaledVector(rho, -N.dot(rho)).normalize();
+    const xAxis = new THREE.Vector3().crossVectors(rho, zAxis).normalize();
+    const m = new THREE.Matrix4().makeBasis(xAxis, rho, zAxis);
+    const q0 = new THREE.Quaternion().setFromRotationMatrix(m);
+    this.racketKin = {
+      pivot: imp.contact.clone().addScaledVector(rho, -SWING_RADIUS),
+      rho,
+      axis,
+      omega: new THREE.Vector3(speed / SWING_RADIUS, 0, 0),
+      q0,
+      linear: speed < 2,
+    };
+  }
+
+  private updateRacket(t: number, shuttlePos: THREE.Vector3) {
+    const k = this.racketKin;
+    const imp = this.impact;
+    if (!k || !imp) return;
+    const omega = k.omega.x;
+    const angle = omega * t;
+    let visible = Math.abs(angle) < 1.8;
+    if (k.linear) visible = t > -0.4 && t < 0.25;
+    this.racket.visible = visible;
+    let pos: THREE.Vector3;
+    let quat: THREE.Quaternion;
+    if (k.linear) {
+      pos = imp.contact.clone().addScaledVector(imp.vRacket, t);
+      quat = k.q0.clone();
+    } else {
+      const qr = new THREE.Quaternion().setFromAxisAngle(k.axis, angle);
+      pos = k.rho.clone().multiplyScalar(SWING_RADIUS).applyQuaternion(qr).add(k.pivot);
+      quat = qr.multiply(k.q0);
+    }
+    // Racket head centre sits just behind the strings' contact point.
+    this.racket.position.copy(pos).addScaledVector(imp.normal, -0.015 * this.opts.shuttleScale);
+    this.racket.quaternion.copy(quat);
+    this.racket.scale.setScalar(this.opts.shuttleScale);
+
+    // Close-up: racket relative to the shuttle (only near contact, real size).
+    const rel = pos.clone().addScaledVector(imp.normal, -0.015).sub(shuttlePos);
+    this.closeRacket.visible = visible && rel.length() < 0.5;
+    this.closeRacket.position.copy(rel);
+    this.closeRacket.quaternion.copy(quat);
+
+    const near = Math.abs(t) < 0.3 && this.opts.showForces;
+    const vhat = imp.vRacket.lengthSq() > 1e-6 ? imp.vRacket.clone().normalize() : imp.normal.clone();
+    const placeArrow = (a: THREE.ArrowHelper, origin: THREE.Vector3, dir: THREE.Vector3) => {
+      a.visible = near;
+      a.position.copy(origin);
+      a.setDirection(dir);
+    };
+    placeArrow(this.impactArrows.face, imp.contact, imp.normal);
+    placeArrow(this.impactArrows.swing, imp.contact, vhat);
+    const rc = imp.contact.clone().sub(shuttlePos);
+    placeArrow(this.closeImpactArrows.face, rc, imp.normal);
+    placeArrow(this.closeImpactArrows.swing, rc, vhat);
+    if (rc.length() > 0.4) {
+      this.closeImpactArrows.face.visible = false;
+      this.closeImpactArrows.swing.visible = false;
+    }
   }
 
   private resize() {

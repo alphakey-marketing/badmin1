@@ -1,9 +1,10 @@
 # badmin1 – 羽毛球動作 × 物理實驗室
 
-A web app with two parts:
+A web app with three parts:
 
 1. **動作教練 (Motion coach)** – reads your whole-body movement from the camera or an uploaded clip and checks it against reference angles for each stroke, including the **kinetic chain** (hips → shoulders → elbow → wrist).
-2. **3D 旋轉物理 (Shuttle physics lab)** – a 3D shuttlecock flight simulator that shows how **spin** changes the aerodynamics: turnover (flip), gyroscopic stability, spin drift and extra drag.
+2. **示範動作 (Demo moves)** – a 3D mannequin performs split step, rear-court clear / jump smash / drop and the forehand net lunge with footwork, step-by-step cues, footprints and the racket-head path, viewable from any angle (right- or left-handed). It also appears inside the coach for the selected drill.
+3. **3D 擊球物理 (Shuttle physics lab)** – a 3D shuttlecock flight simulator that shows how **spin** changes the aerodynamics: turnover (flip), gyroscopic stability, spin drift and extra drag.
 
 Everything runs in the browser. No video is uploaded anywhere.
 
@@ -34,6 +35,12 @@ A 6-degree-of-freedom rigid-body model (`src/physics/shuttleSim.ts`):
 The UI has shot presets (smash, clear, drop, slice drop, tumbling net shot, lift), sliders for launch conditions and spin, slow-motion playback down to 1/50×, a real-size close-up of the spinning shuttle, force arrows, a dashed "no spin" comparison path, charts (speed, tilt angle, spin rate) and step-by-step explanations in Cantonese.
 
 It is a simplified teaching model with rounded coefficients from published studies, not lab-grade data.
+
+### Racket impact (擊球模式)
+
+`src/physics/impact.ts` models the ~1 ms racket–shuttle contact as a rigid-body impulse at the cork: a normal rebound (restitution 0.6, racket effective mass 12–45 g set by the grip) plus friction from the strings brushing the cork (μ = 0.4, an assumption). The incoming shuttle flies cork-first, so the **incoming direction sets how far the shuttle must turn** (about 90° when a vertically falling shuttle is smashed, 180° when a drive is driven back). The face angle against the swing direction (the "cut") produces spin and tumble. A table shows the same swing against five kinds of incoming ball.
+
+Checked against published research: exit speed ≈ 1.35–1.5 × racket-head speed, turnover ≈ 20 ms, terminal velocity 6.5–6.9 m/s, slice spin 125–166 rps, and left- vs right-handed slices spinning in opposite directions (Collet 2024). Each explanation in the app is marked as confirmed by research, disputed, or a model estimate, with links to the sources.
 
 ## Getting started
 
