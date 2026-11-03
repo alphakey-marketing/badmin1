@@ -3,7 +3,7 @@
 Turn MultiSenseBadminton motion-capture recordings into clips the demo can play.
 
 Dataset: Seong et al. (2024) "MultiSenseBadminton: Wearable Sensor-Based Biomechanical Dataset
-for Evaluation of Badminton Performance", Scientific Data. Licence: CC BY 4.0.
+for Evaluation of Badminton Performance", Scientific Data. Licence: CC0 on figshare (the paper states CC BY 4.0); please credit the authors.
 Download (figshare): https://doi.org/10.6084/m9.figshare.c.6725706.v1
 
 The body data comes from Perception Neuron Studio (IMU suit): 21 joints, global position in cm, y up.
@@ -157,7 +157,7 @@ def to_json(item, subject, skill):
     return {
         "format": "badmin1-mocap-v1",
         "source": "MultiSenseBadminton (Seong et al., 2024, Scientific Data)",
-        "license": "CC BY 4.0",
+        "license": "CC0 (figshare record; paper: CC BY 4.0) — please credit Seong et al. 2024",
         "url": "https://doi.org/10.6084/m9.figshare.c.6725706.v1",
         "device": "Perception Neuron Studio (IMU)",
         "stroke": item["stroke"],
