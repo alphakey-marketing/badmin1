@@ -43,6 +43,8 @@ STROKES = {"Overhead Clear": "clear", "Forehand Clear": "clear", "Backhand Drivi
 FPS = 60.0
 PAD_BEFORE = 0.25  # seconds kept before the annotated start
 PAD_AFTER = 0.25
+KEEP_BEFORE = 1.2  # clip kept around contact: 1.2 s before …
+KEEP_AFTER = 0.8  # … and 0.8 s after
 
 
 def text(x):
@@ -132,6 +134,22 @@ def load_annotations(path):
     return rows
 
 
+def metrics(clip, k, hand):
+    side = "Right" if hand == "right" else "Left"
+    other = "Left" if side == "Right" else "Right"
+    lo, hi = max(0, k - int(0.3 * FPS)), min(len(clip), k + int(0.15 * FPS) + 1)
+    pre = range(max(0, k - int(0.8 * FPS)), k + 1)
+    rel = clip[:, J[f"{side} Hand"]] - clip[:, J["Hips"]]
+    speed = np.linalg.norm(np.diff(rel, axis=0), axis=1) * FPS
+    return {
+        "elbowAtSpeedPeak": elbow_angle(clip, k, side),
+        "elbowMaxNearContact": max(elbow_angle(clip, i, side) for i in range(lo, hi)),
+        "minRacketKneeBefore": min(knee_angle(clip, i, side) for i in pre),
+        "minOtherKneeBefore": min(knee_angle(clip, i, other) for i in pre),
+        "peakHandSpeed": float(speed[max(0, k - 1)]),
+    }
+
+
 def extract(path, subject, annotations=None, skill=None):
     out = []
     with h5py.File(path, "r") as f:
@@ -155,12 +173,30 @@ def extract(path, subject, annotations=None, skill=None):
                 continue
             tt, clip = resample(t[m], data[m].reshape(-1, 21, 3), FPS)
             clip, contact, hand = normalise(clip)
-            out.append({"stroke": STROKES[label], "clip": clip, "contact": contact, "hand": hand, "skill": sk})
+            # Keep a fixed window around contact so strokes line up.
+            a = max(0, contact - int(KEEP_BEFORE * FPS))
+            b = min(len(clip), contact + int(KEEP_AFTER * FPS) + 1)
+            if contact - a < int(0.6 * FPS) or b - contact < int(0.3 * FPS):
+                continue
+            clip = clip[a:b] - [clip[a, J["Hips"], 0], 0, clip[a, J["Hips"], 2]]
+            contact -= a
+            out.append({"stroke": STROKES[label], "clip": clip, "contact": contact, "hand": hand, "skill": sk,
+                        "metrics": metrics(clip, contact, hand)})
     return out
 
 
 def medoid(items):
-    """Stroke closest to the average (aligned on contact, resampled to a common length)."""
+    """Stroke closest to the average (aligned on contact, resampled to a common length),
+    chosen among strokes whose key angles are in the normal (inter-quartile) range."""
+    keys = ["elbowMaxNearContact", "minRacketKneeBefore"]
+    ok = items
+    for key in keys:
+        vals = np.array([it["metrics"][key] for it in ok])
+        q1, q3 = np.percentile(vals, [25, 75])
+        kept = [it for it in ok if q1 <= it["metrics"][key] <= q3]
+        if len(kept) >= 3:
+            ok = kept
+    items = ok
     L = 90
     def norm(it):
         c = it["clip"]
@@ -177,7 +213,6 @@ def to_json(item, subject, skill):
     side = "Right" if item["hand"] == "right" else "Left"
     other = "Left" if side == "Right" else "Right"
     k = item["contact"]
-    load = int(np.argmin([knee_angle(clip, i, side) for i in range(0, k + 1)])) if k > 0 else 0
     return {
         "format": "badmin1-mocap-v1",
         "source": "MultiSenseBadminton (Seong et al., 2024, Scientific Data)",
@@ -192,11 +227,7 @@ def to_json(item, subject, skill):
         "contactFrame": k,
         "joints": JOINTS,
         "frames": [[round(float(v), 4) for v in fr.ravel()] for fr in clip],
-        "summary": {
-            "elbowAtContact": round(elbow_angle(clip, k, side), 1),
-            "minRacketSideKneeBeforeContact": round(knee_angle(clip, load, side), 1),
-            "minOtherKneeBeforeContact": round(min(knee_angle(clip, i, other) for i in range(0, k + 1)), 1),
-        },
+        "summary": {k2: round(v, 1) for k2, v in item["metrics"].items()},
     }
 
 
@@ -231,7 +262,16 @@ def main():
         with open(os.path.join(args.out, name), "w") as fh:
             json.dump(doc, fh, separators=(",", ":"))
         subjects = sorted({it["subject"] for it in items})
-        index.append({"stroke": stroke, "file": name, "subject": best["subject"], "skill": doc["skill"], "count": len(items), "subjects": subjects, **doc["summary"]})
+        stats = {}
+        for key in items[0]["metrics"]:
+            vals = np.array([it["metrics"][key] for it in items])
+            per = {sub: round(float(np.median([it["metrics"][key] for it in items if it["subject"] == sub])), 1) for sub in subjects}
+            q1, med, q3 = np.percentile(vals, [25, 50, 75])
+            stats[key] = {"median": round(float(med), 1), "q1": round(float(q1), 1), "q3": round(float(q3), 1), "perSubject": per}
+        doc["stats"] = stats
+        with open(os.path.join(args.out, name), "w") as fh:
+            json.dump(doc, fh, separators=(",", ":"))
+        index.append({"stroke": stroke, "file": name, "subject": best["subject"], "skill": doc["skill"], "count": len(items), "subjects": subjects, "stats": stats})
         print(f"wrote {name}: typical of {len(items)} strokes (from {best['subject']}) {doc['summary']}")
         if args.all:
             for n, it in enumerate(items):
