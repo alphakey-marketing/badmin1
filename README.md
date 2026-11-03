@@ -42,6 +42,12 @@ It is a simplified teaching model with rounded coefficients from published studi
 
 Checked against published research: exit speed ≈ 1.35–1.5 × racket-head speed, turnover ≈ 20 ms, terminal velocity 6.5–6.9 m/s, slice spin 125–166 rps, and left- vs right-handed slices spinning in opposite directions (Collet 2024). Each explanation in the app is marked as confirmed by research, disputed, or a model estimate, with links to the sources.
 
+### Realistic model and motion capture
+
+- The demo and the physics lab use a realistic skinned human model (`public/models/michelle.glb`, Mixamo skeleton) driven by the validated joint positions (`src/demo/humanModel.ts`). A simple mannequin is still available and is used as a fallback.
+- Real motion capture: `scripts/mocap/extract_multisense.py` converts the MultiSenseBadminton dataset (CC BY 4.0, forehand clear and backhand drive) into clips the demo can play, with real-vs-demo angle checks. See `public/mocap/README.md`.
+- The coach tab can record a move from camera/video into the same clip format.
+
 ## Getting started
 
 ```bash

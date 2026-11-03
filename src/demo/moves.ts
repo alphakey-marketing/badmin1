@@ -417,7 +417,7 @@ const BACKHAND_CLEAR: Move = (() => {
 
 function drive(backhand: boolean): Move {
   const s = backhand ? -1 : 1;
-  const CT = 0.95;
+  const CT = 0.88;
   const R: Foot = backhand ? foot(0.35, -0.6, -40) : foot(-0.05, 0.75, 55);
   const L: Foot = backhand ? foot(-0.1, -0.15, -20) : foot(0.05, -0.2, 5);
   const base = { x: 0.05, z: 0.3 * s, yaw: 35 * s, lean: 10, footL: L, footR: R };
@@ -444,7 +444,7 @@ function drive(backhand: boolean): Move {
     keys: [
       { t: 0, pose: READY },
       { t: 0.25, pose: SPLIT_LAND },
-      { t: 0.6, pose: P({ ...base, ...prep }, ['R', 128]) },
+      { t: 0.68, pose: P({ ...base, ...prep }, ['R', 128]) },
       { t: CT, pose: P({ ...base, yaw: 25 * s, ...hit }, ['R', 128]) },
       { t: 1.2, pose: P({ ...base, yaw: 15 * s, ...follow }, ['R', 132]) },
       { t: 1.6, pose: READY },
@@ -452,7 +452,7 @@ function drive(backhand: boolean): Move {
     ],
     steps: [
       { t: 0, title: '分腿跳', cue: '睇到平飛球。', focus: 'legs', muscles: ['calves'] },
-      { t: 0.62, title: backhand ? '右腳踏左前' : '右腳踏右側', cue: backhand ? '右腳向左前方踏，重心落右腳，拍收喺身前（手肘抬起）。' : '右腳向右邊踏，重心落右腳，球拍收喺身側、手肘屈。', focus: 'legs', muscles: ['quads', 'glutes'], checks: [{ label: '承重膝頭', metric: 'kneeR', min: 110, max: 150, unit: '°', ref: '教練建議' }] },
+      { t: 0.66, title: backhand ? '右腳踏左前' : '右腳踏右側', cue: backhand ? '右腳向左前方踏，重心落右腳，拍收喺身前（手肘抬起）。' : '右腳向右邊踏，重心落右腳，球拍收喺身側、手肘屈。', focus: 'legs', muscles: ['quads', 'glutes'], checks: [{ label: '承重膝頭', metric: 'kneeR', min: 110, max: 150, unit: '°', ref: '教練建議' }] },
       { t: CT, title: '擊球', cue: backhand ? '拇指頂拍柄，前臂短促外旋推出，擊球點喺身前。' : '喺肩膊高度身前擊球，前臂內旋，短促發力，唔好大揮拍。', focus: 'wrist', muscles: ['forearm', 'fingers', 'triceps'], checks: [{ label: '擊球時手肘', metric: 'elbowR', min: 115, max: 155, unit: '°', ref: '教練建議：手肘微屈' }, { label: '拍頭高度', metric: 'racketHeadY', min: 1.1, max: 1.9, unit: 'm', ref: '教練建議：大約肩膊高度' }] },
       { t: 1.2, title: '收拍回中', cue: '短隨揮即刻收拍，準備下一球。', focus: 'legs', muscles: ['quads'] },
     ],
