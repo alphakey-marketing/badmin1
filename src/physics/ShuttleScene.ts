@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createRacket, createShuttle } from './shuttleModel';
 import { createMannequin, type Mannequin } from '../demo/mannequin3d';
+import { createHumanFigure } from '../demo/humanModel';
 import { poseAt, solve, type Joints } from '../demo/rig';
 import { MOVES, type Move } from '../demo/moves';
 import { COURT, sampleAt, type SimResult } from './shuttleSim';
@@ -78,6 +79,7 @@ export class ShuttleScene {
   private closeImpactArrows: Record<'face' | 'swing', THREE.ArrowHelper>;
   private racketKin: { pivot: THREE.Vector3; rho: THREE.Vector3; axis: THREE.Vector3; omega: THREE.Vector3; q0: THREE.Quaternion; linear: boolean; radius: number } | null = null;
   private player: Mannequin | null = null;
+  private disposed = false;
   private playerKin: { move: Move; mirror: number; offsetLocal: THREE.Vector3 } | null = null;
 
   private result: SimResult | null = null;
@@ -179,6 +181,27 @@ export class ShuttleScene {
     };
     this.impactArrows = { face: mkImpact(0x4ade80, this.scene, 0.8, 0.12), swing: mkImpact(0xfb923c, this.scene, 0.8, 0.12) };
     this.closeImpactArrows = { face: mkImpact(0x4ade80, this.closeScene, 0.1, 0.018), swing: mkImpact(0xfb923c, this.closeScene, 0.1, 0.018) };
+
+    // Swap in the realistic human model once it has loaded (the simple mannequin is used until then).
+    createHumanFigure()
+      .then((h) => {
+        if (this.disposed) return h.dispose();
+        h.setRacketVisible(false);
+        const old = this.player;
+        if (old) {
+          h.root.position.copy(old.root.position);
+          h.root.scale.copy(old.root.scale);
+          h.root.visible = old.root.visible;
+          this.scene.remove(old.root);
+          old.dispose();
+        } else {
+          h.root.visible = false;
+        }
+        this.scene.add(h.root);
+        this.player = h;
+        this.setTime(this.time);
+      })
+      .catch(() => undefined);
 
     this.resizeObs = new ResizeObserver(() => this.resize());
     this.resizeObs.observe(container);
@@ -645,6 +668,7 @@ export class ShuttleScene {
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.disposed = true;
     this.player?.dispose();
     this.resizeObs.disconnect();
     this.controls.dispose();

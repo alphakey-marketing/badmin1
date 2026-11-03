@@ -52,7 +52,8 @@ function limbGeo(r0: number, r1: number) {
   return g;
 }
 
-export function createMannequin(): Mannequin {
+/** overlay: draw only the working muscle groups, as a translucent layer (used on top of the realistic model). */
+export function createMannequin(opts: { overlay?: boolean } = {}): Mannequin {
   const root = new THREE.Group();
   const disposables: Array<THREE.BufferGeometry | THREE.Material> = [];
   const track = <T extends THREE.BufferGeometry | THREE.Material>(x: T) => {
@@ -156,12 +157,26 @@ export function createMannequin(): Mannequin {
   const baseColor = new Map<THREE.Mesh, number>();
   highlightable.forEach((m) => baseColor.set(m, (m.material as THREE.MeshStandardMaterial).color.getHex()));
 
+  if (opts.overlay) {
+    // Only the highlight layer: every other part is hidden, highlight meshes are see-through.
+    root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.visible = false;
+    });
+    head.visible = false;
+    racket.visible = false;
+    highlightable.forEach((m) => {
+      m.material = track(new THREE.MeshStandardMaterial({ color: MUSCLE_COLOR, transparent: true, opacity: 0.45, depthWrite: false, emissive: MUSCLE_COLOR, emissiveIntensity: 0.4 }));
+      m.castShadow = false;
+    });
+  }
+  const limbScale = opts.overlay ? 1.25 : 1;
+
   const Y = new THREE.Vector3(0, 1, 0);
   const place = (m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) => {
     const d = b.clone().sub(a);
     const l = d.length();
     m.position.copy(a);
-    m.scale.set(1, Math.max(1e-3, l), 1);
+    m.scale.set(limbScale, Math.max(1e-3, l), limbScale);
     m.quaternion.setFromUnitVectors(Y, d.normalize());
   };
 
@@ -235,6 +250,11 @@ export function createMannequin(): Mannequin {
     const pulse = 0.45 + 0.25 * Math.sin(time * 6);
     highlightable.forEach((mesh, key) => {
       const mm = mesh.material as THREE.MeshStandardMaterial;
+      if (opts.overlay) {
+        mesh.visible = active.has(key);
+        mm.opacity = 0.3 + 0.2 * Math.sin(time * 6);
+        return;
+      }
       if (active.has(key)) {
         mm.color.set(baseColor.get(mesh) ?? 0xffffff).lerp(new THREE.Color(MUSCLE_COLOR), 0.65);
         mm.emissive.set(MUSCLE_COLOR);

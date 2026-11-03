@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { measure, poseAt, solve } from './rig';
 import { CATEGORIES, MOVES, MUSCLE_LABEL, type Move, type Part, type Step } from './moves';
 import { createMannequin, type Mannequin } from './mannequin3d';
+import { createHumanFigure } from './humanModel';
+import { clipDuration, clipJoints, clipSummary, loadMocapClip, loadMocapIndex, validateClip, type MocapClip, type MocapIndexEntry } from './mocap';
 import { createShuttle } from '../physics/shuttleModel';
 
 const PART_LABEL: Record<Part, string> = {
@@ -92,10 +94,17 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
   const [cam, setCam] = useState<CamView>('side');
   const [t, setT] = useState(0);
   const [showMuscles, setShowMuscles] = useState(true);
+  const [figureKind, setFigureKind] = useState<'human' | 'mannequin'>('human');
+  const [figureStatus, setFigureStatus] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [mocapIndex, setMocapIndex] = useState<MocapIndexEntry[]>([]);
+  const [clip, setClip] = useState<MocapClip | null>(null);
+  const [source, setSource] = useState<'anim' | 'mocap'>('anim');
+  const fileRef = useRef<HTMLInputElement>(null);
   const tRef = useRef(0);
   const left = hand === 'left';
-  const optsRef = useRef({ move, playing, speed, showMuscles });
-  optsRef.current = { move, playing, speed, showMuscles };
+  const useMocap = source === 'mocap' && !!clip;
+  const optsRef = useRef({ move, playing, speed, showMuscles, clip: useMocap ? clip : null });
+  optsRef.current = { move, playing, speed, showMuscles, clip: useMocap ? clip : null };
 
   useEffect(() => {
     const el = mountRef.current;
@@ -121,6 +130,7 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
     scene.add(world);
     const man = createMannequin();
     world.add(man.root);
+    const figure = { current: man as Mannequin };
     const shuttle = createShuttle();
     shuttle.scale.setScalar(1.6);
     world.add(shuttle);
@@ -152,14 +162,16 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
       const m = o.move;
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      if (o.playing) tRef.current = (tRef.current + dt * o.speed) % m.duration;
-      const tt = tRef.current;
+      const mc = o.clip;
+      const dur = mc ? clipDuration(mc) : m.duration;
+      if (o.playing) tRef.current = (tRef.current + dt * o.speed) % dur;
+      const tt = tRef.current % dur;
       const st = stepAt(m, tt);
-      const j = solve(poseAt(m.keys, tt));
+      const j = mc ? clipJoints(mc, tt) : solve(poseAt(m.keys, tt));
 
       // Shuttle
       let look: THREE.Vector3 | null = null;
-      if (m.contactT !== undefined && m.shuttleIn && m.shuttleOut) {
+      if (!mc && m.contactT !== undefined && m.shuttleIn && m.shuttleOut) {
         const contact = solve(poseAt(m.keys, m.contactT)).racketHead;
         const dtc = tt - m.contactT;
         const dirIn = new THREE.Vector3(...m.shuttleIn).normalize();
@@ -176,7 +188,8 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
       } else {
         shuttle.visible = false;
       }
-      man.update(j, o.showMuscles ? st.muscles ?? [] : [], look, now / 1000);
+      const fig = ctx.current?.man ?? figure.current;
+      fig.update(j, o.showMuscles && !mc ? st.muscles ?? [] : [], look, now / 1000);
       controls.update();
       renderer.render(scene, camera);
       if (now - lastUi > 80) {
@@ -190,12 +203,75 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
-      man.dispose();
+      ctx.current?.man.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       ctx.current = null;
     };
   }, []);
+
+  // Swap between the realistic model and the simple mannequin.
+  useEffect(() => {
+    let cancelled = false;
+    const c = ctx.current;
+    if (!c) return;
+    const swap = (next: Mannequin) => {
+      const cur = ctx.current;
+      if (!cur) return;
+      cur.world.remove(cur.man.root);
+      cur.man.dispose();
+      cur.man = next;
+      cur.world.add(next.root);
+    };
+    if (figureKind === 'mannequin') {
+      swap(createMannequin());
+      setFigureStatus('ok');
+      return;
+    }
+    setFigureStatus('loading');
+    createHumanFigure()
+      .then((h) => {
+        if (cancelled) return h.dispose();
+        swap(h);
+        setFigureStatus('ok');
+      })
+      .catch((e) => {
+        console.error(e);
+        if (!cancelled) setFigureStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [figureKind]);
+
+  // Imported motion-capture clips (public/mocap/index.json).
+  useEffect(() => {
+    loadMocapIndex().then(setMocapIndex);
+  }, []);
+  useEffect(() => {
+    const entry = mocapIndex.find((e) => e.stroke === move.id);
+    if (!entry) {
+      setClip((c) => (c && c.source.startsWith('MultiSense') ? null : c));
+      setSource('anim');
+      return;
+    }
+    loadMocapClip(entry.file).then((c) => {
+      setClip(c);
+      if (c) setSource('mocap');
+    });
+  }, [mocapIndex, move.id]);
+
+  const compare = useMemo(() => {
+    if (!clip) return null;
+    const cs = clipSummary(clip);
+    let demoKnee = 180;
+    let demoElbow: number | null = null;
+    if (move.contactT !== undefined) {
+      for (let tt = 0; tt <= move.contactT; tt += 0.02) demoKnee = Math.min(demoKnee, measure(poseAt(move.keys, tt)).kneeR);
+      demoElbow = measure(poseAt(move.keys, move.contactT)).elbowR;
+    }
+    return { cs, demoKnee: move.contactT !== undefined ? demoKnee : null, demoElbow };
+  }, [clip, move]);
 
   // Footprints + racket-head path for this move
   useEffect(() => {
@@ -288,6 +364,12 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
       <div className="demo-stage">
         <div className="demo-canvas" ref={mountRef} />
         <div className="demo-cue">
+          {useMocap && clip ? (
+            <div className="demo-step">
+              🎥 真人動作捕捉播放中 · {t.toFixed(2)} s / {clipDuration(clip).toFixed(2)} s · 擊球約喺 {(clip.contactFrame / clip.fps).toFixed(2)} s
+            </div>
+          ) : (
+          <>
           <div className="demo-step">
             第 {stepIdx + 1}/{move.steps.length} 步 · <b>{step.title}</b>
             {step.focus !== 'none' && <span className="focus">重點：{PART_LABEL[step.focus]}</span>}
@@ -298,6 +380,8 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
               主要用力肌群：{step.muscles.map((m) => MUSCLE_LABEL[m]).join('、')}
             </div>
           ) : null}
+          </>
+          )}
         </div>
       </div>
       <div className="demo-controls">
@@ -323,7 +407,70 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
           顯示肌群
         </label>
       </div>
-      <div className="demo-steps">
+      <div className="demo-controls">
+        <div className="seg">
+          <button className={figureKind === 'human' ? 'on' : ''} onClick={() => setFigureKind('human')}>真人模型</button>
+          <button className={figureKind === 'mannequin' ? 'on' : ''} onClick={() => setFigureKind('mannequin')}>簡化人偶</button>
+        </div>
+        {figureKind === 'human' && figureStatus === 'loading' && <span className="muted small">載入真人模型中…</span>}
+        {figureKind === 'human' && figureStatus === 'error' && <span className="small" style={{ color: '#fca5a5' }}>真人模型載入失敗，顯示簡化人偶</span>}
+        <div className="seg">
+          <button className={!useMocap ? 'on' : ''} onClick={() => setSource('anim')}>示範動畫</button>
+          <button className={useMocap ? 'on' : ''} disabled={!clip} onClick={() => setSource('mocap')} title={clip ? '' : '未有呢個動作嘅動作捕捉數據'}>
+            真人動作捕捉
+          </button>
+        </div>
+        <button className="btn ghost small" onClick={() => fileRef.current?.click()}>載入動作檔 (.json)</button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            try {
+              const c = validateClip(JSON.parse(await f.text()));
+              if (!c) throw new Error('bad');
+              setClip(c);
+              setSource('mocap');
+              tRef.current = 0;
+            } catch {
+              alert('呢個檔案唔係 badmin1-mocap-v1 格式。');
+            }
+          }}
+        />
+      </div>
+      {useMocap && clip && (
+        <div className="demo-checks">
+          <span className="small">
+            🎥 <b>真人動作捕捉</b>：{clip.source}（{clip.license}）{clip.subject ? ` · ${clip.subject}` : ''}{clip.skill ? ` · ${clip.skill}` : ''} · {clip.hand === 'right' ? '右手' : '左手'} · {clip.frames.length} 幀 @ {clip.fps} fps
+            {clip.url && <> · <a href={clip.url} target="_blank" rel="noreferrer">數據來源</a></>}
+          </span>
+          {compare && (
+            <>
+              <div className="demo-check ok">
+                <span>擊球時手肘</span>
+                <b>真人 {compare.cs.elbowAtContact.toFixed(0)}°</b>
+                <span className="muted">示範 {compare.demoElbow !== null ? `${compare.demoElbow.toFixed(0)}°` : '—'}</span>
+              </div>
+              <div className="demo-check ok">
+                <span>擊球前最屈膝頭（持拍側）</span>
+                <b>真人 {compare.cs.minKneeR.toFixed(0)}°</b>
+                <span className="muted">示範 {compare.demoKnee !== null ? `${compare.demoKnee.toFixed(0)}°` : '—'}</span>
+              </div>
+            </>
+          )}
+          <span className="muted tiny">動作捕捉衣只記錄身體關節，冇記錄球拍同腳趾：球拍方向同腳尖係估算嘅。擊球時間 = 持拍手（相對髖部）最快嗰一刻。</span>
+        </div>
+      )}
+      {!useMocap && !compact && (move.id === 'clear' || move.id === 'backhandDrive') && !clip && (
+        <p className="muted tiny">
+          呢個動作可以用真人動作捕捉數據：從 MultiSenseBadminton 數據集（CC BY 4.0）匯入，步驟見 <code>public/mocap/README.md</code>。
+        </p>
+      )}
+      {!useMocap && <div className="demo-steps">
         {move.steps.map((s, i) => (
           <button
             key={s.t}
@@ -337,8 +484,8 @@ export default function DemoView({ moveId, hand, compact, onMoveChange, showPick
             {i + 1}. {s.title}
           </button>
         ))}
-      </div>
-      {checks.length > 0 && (
+      </div>}
+      {!useMocap && checks.length > 0 && (
         <div className="demo-checks">
           <span className="muted small">呢一步嘅角度核對（示範人物 vs 參考）：</span>
           {checks.map((c) => (

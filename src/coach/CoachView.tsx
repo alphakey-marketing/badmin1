@@ -7,6 +7,7 @@ import PoseOverlay from './PoseOverlay';
 import Skeleton3D from './Skeleton3D';
 import ChainTimeline from './ChainTimeline';
 import DemoView from '../demo/DemoView';
+import { buildClip, fromMediaPipe, resampleFrames } from '../demo/mocap';
 import type { BodyPart, Check, DrillMode, Hand, Landmark, Phase, SwingReport } from './types';
 
 const MODES: Array<{ id: DrillMode; name: string; desc: string }> = [
@@ -67,12 +68,46 @@ export default function CoachView() {
   handRef.current = hand;
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // Recording a move from the video/camera into a motion clip (badmin1-mocap-v1).
+  const recRef = useRef<{ on: boolean; samples: Array<{ t: number; f: number[] }>; t0: number }>({ on: false, samples: [], t0: 0 });
+  const [recState, setRecState] = useState<{ on: boolean; secs: number; saved?: string }>({ on: false, secs: 0 });
+  const stopRecording = useCallback(() => {
+    const r = recRef.current;
+    r.on = false;
+    const frames = resampleFrames(r.samples, 60);
+    if (frames.length < 20) {
+      setRecState({ on: false, secs: 0, saved: '太短（少過 ⅓ 秒），冇儲存。' });
+      return;
+    }
+    const clip = buildClip(frames, 60, {
+      stroke: DEMO_FOR[modeRef.current],
+      hand: handRef.current,
+      source: '自己錄製（MediaPipe 3D 姿勢，由影片／相機）',
+      license: '自己嘅錄影：請確認有影片中人嘅同意',
+    });
+    const blob = new Blob([JSON.stringify(clip)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `badmin1-${clip.stroke}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    setRecState({ on: false, secs: 0, saved: `已下載 ${a.download}（${frames.length} 幀）。去「示範動作」撳「載入動作檔」就可以用真人模型播放。` });
+  }, []);
+
   const onFrame = useCallback((f: PoseFrame | null) => {
     setFrame(f);
     if (!f) {
       setChecks([]);
       setPhase('idle');
       return;
+    }
+    const rec = recRef.current;
+    if (rec.on) {
+      if (!rec.samples.length) rec.t0 = f.t;
+      rec.samples.push({ t: f.t, f: fromMediaPipe(f.world) });
+      const secs = f.t - rec.t0;
+      if (secs > 8) stopRecording();
+      else if (rec.samples.length % 10 === 0) setRecState((st) => ({ ...st, secs }));
     }
     const r = analyzer.current.push(f.world, f.t, handRef.current, modeRef.current);
     setChecks(liveChecks(r.metrics, modeRef.current));
@@ -81,7 +116,7 @@ export default function CoachView() {
       setReport(r.swing);
       setHistory((h) => [r.swing as SwingReport, ...h].slice(0, 8));
     }
-  }, []);
+  }, [stopRecording]);
   const onReset = useCallback(() => analyzer.current.reset(), []);
 
   const { ready, modelError, fps } = usePose(src.videoRef, src.kind !== null, { slowMotionFactor: slowMo, onFrame, onReset });
@@ -127,6 +162,20 @@ export default function CoachView() {
               e.target.value = '';
             }}
           />
+          {src.kind && (
+            <button
+              className={`btn small ${recState.on ? '' : 'ghost'}`}
+              onClick={() => {
+                if (recState.on) return stopRecording();
+                recRef.current = { on: true, samples: [], t0: 0 };
+                setRecState({ on: true, secs: 0 });
+              }}
+              title="將影片入面嘅動作錄成 3D 動作檔，可以喺示範頁用真人模型播放"
+            >
+              {recState.on ? `■ 停止錄製（${recState.secs.toFixed(1)} s）` : '⏺ 錄製動作'}
+            </button>
+          )}
+          {recState.saved && <span className="muted tiny">{recState.saved}</span>}
           <span className="spacer" />
           <span className={`pill ${ready ? 'ok' : ''}`}>{modelError ? '模型錯誤' : ready ? `● ${fps} fps` : '○ 載入模型中…'}</span>
         </div>
