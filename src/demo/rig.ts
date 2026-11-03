@@ -28,6 +28,8 @@ export interface Pose {
   /** Chest rotation relative to the pelvis (degrees), forward lean (degrees). */
   twist: number;
   lean: number;
+  /** Sideways bend of the trunk, degrees (+ = towards the right). */
+  side?: number;
   footL: Foot;
   footR: Foot;
   handR: Vec;
@@ -109,7 +111,8 @@ export interface Joints {
   up: THREE.Vector3;
 }
 
-export function solve(p: Pose): Joints {
+/** `wristR` overrides where the racket hand goes (world position), e.g. to hold a racket driven by physics. */
+export function solve(p: Pose, override?: { wristR?: THREE.Vector3 }): Joints {
   const pf = yawDir(p.yaw);
   const pr = new THREE.Vector3().crossVectors(pf, UP).normalize();
   const pelvis = new THREE.Vector3(p.x, p.h, p.z);
@@ -120,8 +123,11 @@ export function solve(p: Pose): Joints {
   const cf0 = yawDir(p.yaw + p.twist);
   const cr = new THREE.Vector3().crossVectors(cf0, UP).normalize();
   const lean = new THREE.Quaternion().setFromAxisAngle(cr, -d2r(p.lean));
-  const cu = UP.clone().applyQuaternion(lean);
-  const cf = cf0.clone().applyQuaternion(lean);
+  const bend = new THREE.Quaternion().setFromAxisAngle(cf0, d2r(p.side ?? 0));
+  const rot = bend.multiply(lean);
+  const cu = UP.clone().applyQuaternion(rot);
+  const cf = cf0.clone().applyQuaternion(rot);
+  cr.crossVectors(cf, cu).normalize();
   const chest = pelvis.clone().addScaledVector(cu, BODY.spine);
   const head = chest.clone().addScaledVector(cu, BODY.neck);
   const toWorld = (v: Vec) => cf.clone().multiplyScalar(v[0]).addScaledVector(cu, v[1]).addScaledVector(cr, v[2]);
@@ -139,7 +145,7 @@ export function solve(p: Pose): Joints {
   const R = leg(hipR, p.footR);
 
   const arm = (sh: THREE.Vector3, hand: Vec, hint: Vec | undefined, side: 1 | -1) => {
-    const target = chest.clone().add(toWorld(hand));
+    const target = side === 1 && override?.wristR ? override.wristR.clone() : chest.clone().add(toWorld(hand));
     const pole = toWorld(hint ?? [-0.3, -1, 0.6 * side]);
     const { mid, end } = ik(sh, target, BODY.upperArm, BODY.forearm, pole);
     return { elbow: mid, wrist: end };
@@ -168,7 +174,7 @@ export function solve(p: Pose): Joints {
 function flatten(p: Pose): number[] {
   const f = (x: Foot) => [x.x, x.z, x.yaw, x.lift];
   return [
-    p.x, p.z, p.h, p.yaw, p.twist, p.lean,
+    p.x, p.z, p.h, p.yaw, p.twist, p.lean, p.side ?? 0,
     ...f(p.footL), ...f(p.footR),
     ...p.handR, ...p.headR, ...p.faceR, ...p.handL,
     ...(p.elbowR ?? [-0.3, -1, 0.6]), ...(p.elbowL ?? [-0.3, -1, -0.6]),
@@ -180,10 +186,10 @@ function unflatten(a: number[]): Pose {
   const n = () => a[i++];
   const foot = (): Foot => ({ x: n(), z: n(), yaw: n(), lift: Math.max(0, n()) });
   const v = (): Vec => [n(), n(), n()];
-  const x = n(), z = n(), h = n(), yaw = n(), twist = n(), lean = n();
+  const x = n(), z = n(), h = n(), yaw = n(), twist = n(), lean = n(), side = n();
   const footL = foot();
   const footR = foot();
-  return { x, z, h, yaw, twist, lean, footL, footR, handR: v(), headR: v(), faceR: v(), handL: v(), elbowR: v(), elbowL: v() };
+  return { x, z, h, yaw, twist, lean, side, footL, footR, handR: v(), headR: v(), faceR: v(), handL: v(), elbowR: v(), elbowL: v() };
 }
 
 export interface Key {
@@ -238,5 +244,93 @@ export function mirrorPose(p: Pose): Pose {
     handL: mv(p.handL) as Vec,
     elbowR: mv(p.elbowR),
     elbowL: mv(p.elbowL),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Authoring helpers: set poses by joint angle instead of guessing positions
+// ---------------------------------------------------------------------------
+
+/** Shoulder→hand distance for a given elbow angle (180 = straight). */
+export function reachFor(elbowDeg: number) {
+  const a = BODY.upperArm;
+  const b = BODY.forearm;
+  return Math.sqrt(a * a + b * b - 2 * a * b * Math.cos(d2r(elbowDeg)));
+}
+
+/**
+ * Hand target (chest frame) for an arm pointing along `dir` ([fwd, up, right], from the shoulder)
+ * with the given elbow angle.
+ */
+export function hand(side: 'R' | 'L', dir: Vec, elbowDeg: number): Vec {
+  const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  const r = reachFor(elbowDeg);
+  const sz = side === 'R' ? BODY.shoulderHalf : -BODY.shoulderHalf;
+  return [(dir[0] / l) * r, (dir[1] / l) * r, sz + (dir[2] / l) * r];
+}
+
+/** Racket head target (chest frame): from the hand along `dir`. */
+export function racket(handPos: Vec, dir: Vec): Vec {
+  const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  return [handPos[0] + (dir[0] / l) * BODY.racketLen, handPos[1] + (dir[1] / l) * BODY.racketLen, handPos[2] + (dir[2] / l) * BODY.racketLen];
+}
+
+/** Hip-to-ankle length for a knee angle. */
+function legLen(kneeDeg: number) {
+  const a = BODY.thigh;
+  const b = BODY.shin;
+  return Math.sqrt(a * a + b * b - 2 * a * b * Math.cos(d2r(kneeDeg)));
+}
+
+/** Set the pelvis height so that one leg has the given knee angle (its foot stays where it is). */
+export function fitHeight(p: Pose, side: 'R' | 'L', kneeDeg: number): Pose {
+  const pf = yawDir(p.yaw);
+  const pr = new THREE.Vector3().crossVectors(pf, UP).normalize();
+  const hip = new THREE.Vector3(p.x, 0, p.z).addScaledVector(pr, side === 'R' ? BODY.hipHalf : -BODY.hipHalf);
+  const f = side === 'R' ? p.footR : p.footL;
+  const d = Math.hypot(hip.x - f.x, hip.z - f.z);
+  const L = legLen(kneeDeg);
+  const v = Math.sqrt(Math.max(0.01, L * L - d * d));
+  return { ...p, h: BODY.ankle + f.lift + v };
+}
+
+export interface Measure {
+  kneeR: number;
+  kneeL: number;
+  elbowR: number;
+  /** Upper arm vs trunk, degrees (0 = arm by the side, 180 = straight up). */
+  shoulderR: number;
+  lean: number;
+  /** Feet apart / shoulder width. */
+  stance: number;
+  /** Knee ahead of toes along the foot direction (m). */
+  kneePastToeR: number;
+  kneePastToeL: number;
+  /** How far each ankle misses its target (m): > 2 cm means the leg cannot reach (foot floats). */
+  footMissR: number;
+  footMissL: number;
+  wristAboveHead: number;
+  racketHeadY: number;
+}
+
+const ang = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => (a.clone().sub(b).angleTo(c.clone().sub(b)) * 180) / Math.PI;
+
+export function measure(p: Pose): Measure {
+  const j = solve(p);
+  const past = (knee: THREE.Vector3, toe: THREE.Vector3, yaw: number) => knee.clone().sub(toe).dot(yawDir(yaw));
+  const miss = (ankle: THREE.Vector3, f: Foot) => ankle.distanceTo(new THREE.Vector3(f.x, BODY.ankle + f.lift, f.z));
+  return {
+    kneeR: ang(j.hipR, j.kneeR, j.ankleR),
+    kneeL: ang(j.hipL, j.kneeL, j.ankleL),
+    elbowR: ang(j.shoulderR, j.elbowR, j.wristR),
+    shoulderR: ang(j.hipR, j.shoulderR, j.elbowR),
+    lean: (j.chest.clone().sub(j.pelvis).angleTo(UP) * 180) / Math.PI,
+    stance: Math.hypot(j.ankleR.x - j.ankleL.x, j.ankleR.z - j.ankleL.z) / (2 * BODY.shoulderHalf),
+    kneePastToeR: past(j.kneeR, j.toeR, p.footR.yaw),
+    kneePastToeL: past(j.kneeL, j.toeL, p.footL.yaw),
+    footMissR: miss(j.ankleR, p.footR),
+    footMissL: miss(j.ankleL, p.footL),
+    wristAboveHead: j.wristR.y - j.head.y,
+    racketHeadY: j.racketHead.y,
   };
 }

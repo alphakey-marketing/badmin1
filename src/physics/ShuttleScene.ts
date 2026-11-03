@@ -6,6 +6,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createRacket, createShuttle } from './shuttleModel';
+import { createMannequin, type Mannequin } from '../demo/mannequin3d';
+import { poseAt, solve, type Joints } from '../demo/rig';
+import { MOVES, type Move } from '../demo/moves';
 import { COURT, sampleAt, type SimResult } from './shuttleSim';
 
 /** What the scene needs to draw the racket hit (impact mode). */
@@ -14,6 +17,8 @@ export interface ImpactView {
   incoming: Array<{ t: number; pos: THREE.Vector3; vel: THREE.Vector3 }>;
   vRacket: THREE.Vector3;
   normal: THREE.Vector3;
+  /** Demo move for the 3D player who hits the shuttle. */
+  player?: { move: string; left?: boolean };
 }
 
 interface State {
@@ -26,7 +31,6 @@ interface State {
   gravity: THREE.Vector3;
 }
 
-const SWING_RADIUS = 0.9; // shoulder → racket head, metres
 const UPV = new THREE.Vector3(0, 1, 0);
 
 export interface SceneOptions {
@@ -72,7 +76,9 @@ export class ShuttleScene {
   private impact: ImpactView | null = null;
   private impactArrows: Record<'face' | 'swing', THREE.ArrowHelper>;
   private closeImpactArrows: Record<'face' | 'swing', THREE.ArrowHelper>;
-  private racketKin: { pivot: THREE.Vector3; rho: THREE.Vector3; axis: THREE.Vector3; omega: THREE.Vector3; q0: THREE.Quaternion; linear: boolean } | null = null;
+  private racketKin: { pivot: THREE.Vector3; rho: THREE.Vector3; axis: THREE.Vector3; omega: THREE.Vector3; q0: THREE.Quaternion; linear: boolean; radius: number } | null = null;
+  private player: Mannequin | null = null;
+  private playerKin: { move: Move; mirror: number; offsetLocal: THREE.Vector3 } | null = null;
 
   private result: SimResult | null = null;
   private ghost: SimResult | null = null;
@@ -90,6 +96,8 @@ export class ShuttleScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setScissorTest(true);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200);
@@ -184,6 +192,9 @@ export class ShuttleScene {
     this.scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.8));
     const sun = new THREE.DirectionalLight(0xffffff, 1.4);
     sun.position.set(-4, 10, 6);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 6, bottom: -6, near: 1, far: 30 });
     this.scene.add(sun);
 
     const floor = new THREE.Mesh(
@@ -199,6 +210,7 @@ export class ShuttleScene {
       new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.9 }),
     );
     court.rotation.x = -Math.PI / 2;
+    court.receiveShadow = true;
     this.scene.add(court);
 
     // Court lines (doubles court, metres)
@@ -422,13 +434,19 @@ export class ShuttleScene {
     return s;
   }
 
-  /** Racket swings on an arc around the shoulder and passes through the contact point at t = 0. */
+  /**
+   * Racket swings on an arc around the shoulder and passes through the contact point at t = 0.
+   * With a 3D player, the arc is centred on the player's racket shoulder, and the player is placed
+   * so that its racket meets the shuttle at the contact point.
+   */
   private setupRacket() {
     const imp = this.impact;
     this.racket.visible = !!imp;
     this.closeRacket.visible = !!imp;
     if (!imp) {
       this.racketKin = null;
+      this.playerKin = null;
+      if (this.player) this.player.root.visible = false;
       Object.values(this.impactArrows).forEach((a) => (a.visible = false));
       Object.values(this.closeImpactArrows).forEach((a) => (a.visible = false));
       return;
@@ -436,56 +454,119 @@ export class ShuttleScene {
     const N = imp.normal.clone().normalize();
     const speed = imp.vRacket.length();
     const vhat = speed > 1e-6 ? imp.vRacket.clone().normalize() : UPV.clone();
-    // Shaft lies in the string plane: choose rho ⟂ N and ⟂ swing direction, pointing upwards.
-    let rho = new THREE.Vector3().crossVectors(N, vhat);
-    if (rho.lengthSq() < 1e-4) rho = UPV.clone().addScaledVector(vhat, -UPV.dot(vhat));
-    if (rho.lengthSq() < 1e-4) rho.set(0, 0, 1);
-    rho.normalize();
-    if (rho.y < 0) rho.negate();
+    const mirror = imp.player?.left ? -1 : 1;
+    const M = (v: THREE.Vector3) => new THREE.Vector3(v.x, v.y, v.z * mirror);
+    const move = imp.player ? MOVES.find((m) => m.id === imp.player?.move) : undefined;
+
+    let rho: THREE.Vector3 | null = null;
+    let radius = 0.9;
+    let jc: Joints | null = null;
+    if (move && move.contactT !== undefined) {
+      jc = solve(poseAt(move.keys, move.contactT));
+      // Shoulder → racket head at contact (player's own shape), made perpendicular to the swing and the face.
+      const dir = M(jc.racketHead.clone().sub(jc.shoulderR));
+      radius = Math.min(1.15, Math.max(0.7, dir.length()));
+      const r = dir.normalize();
+      r.addScaledVector(vhat, -r.dot(vhat));
+      const nPerp = N.clone().addScaledVector(vhat, -N.dot(vhat));
+      if (nPerp.lengthSq() > 1e-4) {
+        nPerp.normalize();
+        r.addScaledVector(nPerp, -r.dot(nPerp));
+      }
+      if (r.lengthSq() > 1e-3) rho = r.normalize();
+    }
+    if (!rho) {
+      // Shaft lies in the string plane: choose rho ⟂ N and ⟂ swing direction, pointing upwards.
+      rho = new THREE.Vector3().crossVectors(N, vhat);
+      if (rho.lengthSq() < 1e-4) rho = UPV.clone().addScaledVector(vhat, -UPV.dot(vhat));
+      if (rho.lengthSq() < 1e-4) rho.set(0, 0, 1);
+      rho.normalize();
+      if (rho.y < 0) rho.negate();
+    }
     const axis = new THREE.Vector3().crossVectors(rho, vhat).normalize();
     const zAxis = N.clone().addScaledVector(rho, -N.dot(rho)).normalize();
     const xAxis = new THREE.Vector3().crossVectors(rho, zAxis).normalize();
-    const m = new THREE.Matrix4().makeBasis(xAxis, rho, zAxis);
-    const q0 = new THREE.Quaternion().setFromRotationMatrix(m);
-    this.racketKin = {
-      pivot: imp.contact.clone().addScaledVector(rho, -SWING_RADIUS),
-      rho,
-      axis,
-      omega: new THREE.Vector3(speed / SWING_RADIUS, 0, 0),
-      q0,
-      linear: speed < 2,
-    };
+    const q0 = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, rho, zAxis));
+    const pivot = imp.contact.clone().addScaledVector(rho, -radius);
+    this.racketKin = { pivot, rho, axis, omega: new THREE.Vector3(speed / radius, 0, 0), q0, linear: speed < 2, radius };
+
+    if (move && jc) {
+      if (!this.player) {
+        this.player = createMannequin();
+        this.player.setRacketVisible(false);
+        this.scene.add(this.player.root);
+      }
+      this.player.root.visible = true;
+      this.player.root.scale.z = mirror;
+      // Place the player so its racket shoulder sits on the swing pivot at contact.
+      const offsetLocal = M(pivot).sub(jc.shoulderR);
+      this.player.root.position.copy(M(offsetLocal));
+      this.playerKin = { move, mirror, offsetLocal };
+    } else {
+      this.playerKin = null;
+      if (this.player) this.player.root.visible = false;
+    }
   }
 
   private updateRacket(t: number, shuttlePos: THREE.Vector3) {
     const k = this.racketKin;
     const imp = this.impact;
     if (!k || !imp) return;
-    const omega = k.omega.x;
-    const angle = omega * t;
-    let visible = Math.abs(angle) < 1.8;
-    if (k.linear) visible = t > -0.4 && t < 0.25;
-    this.racket.visible = visible;
-    let pos: THREE.Vector3;
-    let quat: THREE.Quaternion;
+    const angle = k.omega.x * t;
+    let arcPos: THREE.Vector3;
+    let arcQuat: THREE.Quaternion;
     if (k.linear) {
-      pos = imp.contact.clone().addScaledVector(imp.vRacket, t);
-      quat = k.q0.clone();
+      arcPos = imp.contact.clone().addScaledVector(imp.vRacket, t);
+      arcQuat = k.q0.clone();
     } else {
       const qr = new THREE.Quaternion().setFromAxisAngle(k.axis, angle);
-      pos = k.rho.clone().multiplyScalar(SWING_RADIUS).applyQuaternion(qr).add(k.pivot);
-      quat = qr.multiply(k.q0);
+      arcPos = k.rho.clone().multiplyScalar(k.radius).applyQuaternion(qr).add(k.pivot);
+      arcQuat = qr.multiply(k.q0);
     }
     // Racket head centre sits just behind the strings' contact point.
-    this.racket.position.copy(pos).addScaledVector(imp.normal, -0.015 * this.opts.shuttleScale);
-    this.racket.quaternion.copy(quat);
-    this.racket.scale.setScalar(this.opts.shuttleScale);
+    const arcHead = arcPos.clone().addScaledVector(imp.normal, -0.015);
+
+    let headPos = arcHead;
+    let headQuat = arcQuat;
+    let visible = k.linear ? t > -0.4 && t < 0.25 : Math.abs(angle) < 1.8;
+    const pk = this.playerKin;
+    if (pk && this.player) {
+      // Blend from the player's own racket (key poses) into the physics swing near contact.
+      const mv = pk.move;
+      const mt = Math.max(0, Math.min(mv.duration, (mv.contactT ?? 0) + t));
+      const pose = poseAt(mv.keys, mt);
+      const j0 = solve(pose);
+      const M = (v: THREE.Vector3) => new THREE.Vector3(v.x, v.y, v.z * pk.mirror);
+      const toWorld = (v: THREE.Vector3) => M(v.clone().add(pk.offsetLocal));
+      const kHead = toWorld(j0.racketHead);
+      const ky = M(j0.racketHead.clone().sub(j0.wristR)).normalize();
+      const kz = M(j0.racketFace.clone()).normalize();
+      const kx = new THREE.Vector3().crossVectors(ky, kz).normalize();
+      const kQuat = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(kx, ky, kz));
+      const a = Math.abs(k.linear ? t * 6 : angle);
+      const w = 1 - THREE.MathUtils.smoothstep(a, 0.5, 1.4);
+      headPos = kHead.clone().lerp(arcHead, w);
+      headQuat = kQuat.clone().slerp(arcQuat, w);
+      visible = true;
+      // The hand holds the grip: 0.5 m from the head centre along the shaft.
+      const shaft = new THREE.Vector3(0, 1, 0).applyQuaternion(headQuat);
+      const gripWorld = headPos.clone().addScaledVector(shaft, -0.5);
+      const gripLocal = M(gripWorld).sub(pk.offsetLocal);
+      const j = solve(pose, { wristR: gripLocal });
+      const look = M(shuttlePos).sub(pk.offsetLocal);
+      this.player.update(j, [], t < 0.08 ? look : null, performance.now() / 1000);
+    }
+    this.racket.visible = visible;
+    this.racket.position.copy(headPos);
+    this.racket.quaternion.copy(headQuat);
+    this.racket.scale.setScalar(pk ? 1 : this.opts.shuttleScale);
+    if (!pk) this.racket.position.addScaledVector(imp.normal, -0.015 * (this.opts.shuttleScale - 1));
 
     // Close-up: racket relative to the shuttle (only near contact, real size).
-    const rel = pos.clone().addScaledVector(imp.normal, -0.015).sub(shuttlePos);
-    this.closeRacket.visible = visible && rel.length() < 0.5;
+    const rel = arcHead.clone().sub(shuttlePos);
+    this.closeRacket.visible = Math.abs(angle) < 1.8 && rel.length() < 0.5;
     this.closeRacket.position.copy(rel);
-    this.closeRacket.quaternion.copy(quat);
+    this.closeRacket.quaternion.copy(arcQuat);
 
     const near = Math.abs(t) < 0.3 && this.opts.showForces;
     const vhat = imp.vRacket.lengthSq() > 1e-6 ? imp.vRacket.clone().normalize() : imp.normal.clone();
@@ -503,6 +584,15 @@ export class ShuttleScene {
       this.closeImpactArrows.face.visible = false;
       this.closeImpactArrows.swing.visible = false;
     }
+  }
+
+  /** Camera position that frames the player and the hit. */
+  focusHit() {
+    const imp = this.impact;
+    if (!imp) return this.resetView();
+    const c = imp.contact;
+    this.camera.position.set(c.x - 2.2, Math.max(1.6, c.y + 0.4), c.z + 4.2);
+    this.controls.target.set(c.x + 0.8, Math.max(1, c.y - 0.6), c.z);
   }
 
   private resize() {
@@ -555,6 +645,7 @@ export class ShuttleScene {
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    this.player?.dispose();
     this.resizeObs.disconnect();
     this.controls.dispose();
     this.renderer.dispose();

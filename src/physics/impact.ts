@@ -66,60 +66,63 @@ export interface Stroke {
   swing: Swing;
   /** Suggested incoming ball for this stroke. */
   incoming: string;
+  /** Demo move the 3D player performs for this stroke, and whether it is a left-hander. */
+  move: string;
+  left?: boolean;
 }
 
 /** Right-handed player unless the name says otherwise. +z is the player's right. */
 export const STROKES: Stroke[] = [
   {
-    id: 'smash', name: '殺球', incoming: 'vertical',
+    id: 'smash', move: 'smash', name: '殺球', incoming: 'vertical',
     hint: '拍面向下壓（拍面朝前下方），揮拍方向向前下。',
     contact: { x: -4.4, y: 2.75, z: 0.45 },
     swing: { speed: 50, swingElev: -6, swingAzim: 0, faceElev: -10, faceAzim: 0, massG: 38 },
   },
   {
-    id: 'clear', name: '高遠球', incoming: 'vertical',
+    id: 'clear', move: 'clear', name: '高遠球', incoming: 'vertical',
     hint: '拍面向上開（約 35°），揮拍方向向前上。',
     contact: { x: -5.0, y: 2.65, z: 0.4 },
     swing: { speed: 31, swingElev: 25, swingAzim: 0, faceElev: 36, faceAzim: 0, massG: 35 },
   },
   {
-    id: 'drop', name: '吊球（輕擊）', incoming: 'vertical',
+    id: 'drop', move: 'drop', name: '吊球（輕擊）', incoming: 'vertical',
     hint: '準備動作同殺球一樣，觸球一刻減速，拍面平推。',
     contact: { x: -4.4, y: 2.65, z: 0.4 },
     swing: { speed: 10, swingElev: 12, swingAzim: 0, faceElev: 24, faceAzim: 0, massG: 30 },
   },
   {
-    id: 'slice', name: '劈吊（右手正手切）', incoming: 'vertical',
+    id: 'slice', move: 'slice', name: '劈吊（右手正手切）', incoming: 'vertical',
     hint: '揮拍向左前方「切」過球頭，但拍面仍然向前：拍面同揮拍方向有夾角 → 摩擦令球自旋。',
     contact: { x: -4.4, y: 2.65, z: 0.45 },
     swing: { speed: 28, swingElev: -4, swingAzim: -30, faceElev: 0, faceAzim: 2, massG: 35 },
   },
   {
-    id: 'sliceL', name: '左手劈吊（或右手反切）', incoming: 'vertical',
+    id: 'sliceL', move: 'slice', left: true, name: '左手劈吊（或右手反切）', incoming: 'vertical',
     hint: '同上但左右相反：產生相反方向嘅自旋，研究發現呢種球減速更快。',
     contact: { x: -4.4, y: 2.65, z: -0.45 },
     swing: { speed: 28, swingElev: -4, swingAzim: 30, faceElev: 0, faceAzim: -2, massG: 35 },
   },
   {
-    id: 'drive', name: '平抽', incoming: 'drive',
+    id: 'drive', move: 'forehandDrive', name: '平抽', incoming: 'drive',
     hint: '拍面垂直、揮拍方向平向前。',
     contact: { x: -3.0, y: 1.55, z: 0.45 },
     swing: { speed: 20, swingElev: 3, swingAzim: 0, faceElev: 4, faceAzim: 0, massG: 32 },
   },
   {
-    id: 'block', name: '擋網（接殺）', incoming: 'smash',
+    id: 'block', move: 'block', name: '擋網（接殺）', incoming: 'smash',
     hint: '幾乎唔揮拍，放鬆握拍（有效質量細），拍面向上開，借對方來球嘅力。',
     contact: { x: -3.4, y: 0.85, z: 0.35 },
     swing: { speed: 4, swingElev: 10, swingAzim: 0, faceElev: 22, faceAzim: 0, massG: 20 },
   },
   {
-    id: 'tumble', name: '搓球（翻滾網前）', incoming: 'net',
+    id: 'tumble', move: 'net', name: '搓球（翻滾網前）', incoming: 'net',
     hint: '拍面向上，球拍橫向擦過球頭底部，令球翻滾。',
     contact: { x: -0.35, y: 1.3, z: 0 },
     swing: { speed: 3.5, swingElev: 25, swingAzim: -70, faceElev: 50, faceAzim: 0, massG: 20 },
   },
   {
-    id: 'lift', name: '挑球', incoming: 'net',
+    id: 'lift', move: 'lift', name: '挑球', incoming: 'net',
     hint: '網前低位，拍面向上大角度開，向上揮。',
     contact: { x: -1.6, y: 0.55, z: 0.3 },
     swing: { speed: 18, swingElev: 45, swingAzim: 0, faceElev: 52, faceAzim: 0, massG: 32 },

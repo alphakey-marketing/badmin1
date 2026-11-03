@@ -14,13 +14,17 @@ interface Props {
   /** Vertical marker (e.g. the playback time). */
   cursorX?: number;
   xMax?: number;
+  /** Left end of the x axis (default 0). */
+  xMin?: number;
+  /** How to print x tick labels (default: seconds). */
+  xFormat?: (v: number) => string;
   yMin?: number;
   yMax?: number;
   height?: number;
 }
 
 /** Small canvas line chart with a moving cursor. */
-export default function LineChart({ title, unit, series, cursorX, xMax, yMin, yMax, height = 120 }: Props) {
+export default function LineChart({ title, unit, series, cursorX, xMax, xMin = 0, xFormat, yMin, yMax, height = 120 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -46,7 +50,7 @@ export default function LineChart({ title, unit, series, cursorX, xMax, yMin, yM
       y0 -= 1;
     }
     const pad = { l: 34, r: 8, t: 6, b: 18 };
-    const px = (x: number) => pad.l + (x / (x1 || 1)) * (w - pad.l - pad.r);
+    const px = (x: number) => pad.l + ((x - xMin) / (x1 - xMin || 1)) * (w - pad.l - pad.r);
     const py = (y: number) => h - pad.b - ((y - y0) / (y1 - y0)) * (h - pad.t - pad.b);
 
     const css = getComputedStyle(canvas);
@@ -69,8 +73,8 @@ export default function LineChart({ title, unit, series, cursorX, xMax, yMin, yM
     }
     ctx.textAlign = 'center';
     for (let i = 0; i <= 4; i++) {
-      const v = (x1 * i) / 4;
-      ctx.fillText(`${v.toFixed(1)}s`, px(v), h - 4);
+      const v = xMin + ((x1 - xMin) * i) / 4;
+      ctx.fillText(xFormat ? xFormat(v) : `${v.toFixed(1)}s`, px(v), h - 4);
     }
 
     for (const s of series) {
@@ -95,7 +99,7 @@ export default function LineChart({ title, unit, series, cursorX, xMax, yMin, yM
       ctx.lineTo(px(cursorX), h - pad.b);
       ctx.stroke();
     }
-  }, [series, cursorX, xMax, yMin, yMax]);
+  }, [series, cursorX, xMax, xMin, xFormat, yMin, yMax]);
 
   return (
     <figure className="chart">

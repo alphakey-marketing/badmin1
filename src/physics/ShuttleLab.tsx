@@ -20,6 +20,7 @@ import {
 } from './impact';
 import LineChart, { type Series } from '../shared/LineChart';
 import PhysicsExplainer from './PhysicsExplainer';
+import SpinTraining from './SpinTraining';
 
 const TIME_SCALES = [
   { v: 1, label: '1×' },
@@ -88,6 +89,8 @@ export default function ShuttleLab() {
   const [strokeId, setStrokeId] = useState('smash');
   const [swing, setSwing] = useState<Swing>(STROKES[0].swing);
   const [contact, setContact] = useState(STROKES[0].contact);
+  const [playerMove, setPlayerMove] = useState<{ move: string; left?: boolean }>({ move: STROKES[0].move });
+  const [showPlayer, setShowPlayer] = useState(true);
   const [incId, setIncId] = useState('vertical');
   const [inc, setInc] = useState<Inc>(INCOMING[0]);
   // Shared
@@ -117,7 +120,7 @@ export default function ShuttleLab() {
     const vIn = incomingVelocity(inc);
     const imp = computeImpact(vIn, swing);
     const c = new Vector3(contact.x, contact.y, contact.z);
-    const path = incomingPath(c, vIn, 0.45);
+    const path = incomingPath(c, vIn, 1.3);
     return { imp, contact: c, path };
   }, [mode, inc, swing, contact]);
 
@@ -149,10 +152,13 @@ export default function ShuttleLab() {
   }, [params, compare]);
 
   const impactView: ImpactView | null = useMemo(
-    () => (hit ? { contact: hit.contact, incoming: hit.path, vRacket: hit.imp.vRacket, normal: hit.imp.normal } : null),
-    [hit],
+    () =>
+      hit
+        ? { contact: hit.contact, incoming: hit.path, vRacket: hit.imp.vRacket, normal: hit.imp.normal, player: showPlayer ? playerMove : undefined }
+        : null,
+    [hit, showPlayer, playerMove],
   );
-  const start = hit ? Math.max(-0.35, hit.path[0]?.t ?? 0) : 0;
+  const start = hit ? Math.max(showPlayer ? -1.2 : -0.35, hit.path[0]?.t ?? 0) : 0;
   const end = Math.max(result.flightTime, ghost?.flightTime ?? 0);
 
   // Same swing against every kind of incoming ball.
@@ -191,8 +197,8 @@ export default function ShuttleLab() {
   }, [result, ghost, impactView, start]);
 
   useEffect(() => {
-    sceneRef.current?.setOptions({ showForces, follow, shuttleScale: mode === 'hit' ? 2.5 : 6 });
-  }, [showForces, follow, mode]);
+    sceneRef.current?.setOptions({ showForces, follow, shuttleScale: mode === 'hit' ? (showPlayer ? 1.8 : 2.5) : 6 });
+  }, [showForces, follow, mode, showPlayer]);
 
   // Playback loop
   useEffect(() => {
@@ -233,12 +239,13 @@ export default function ShuttleLab() {
     setPresetId('custom');
     setBase((b) => ({ ...b, [k]: v }));
   };
-  const applyStroke = (id: string) => {
+  const applyStroke = (id: string, tweak?: Partial<Swing>) => {
     const st = STROKES.find((x) => x.id === id);
     if (!st) return;
-    setStrokeId(id);
-    setSwing(st.swing);
+    setStrokeId(tweak ? 'custom' : id);
+    setSwing({ ...st.swing, ...tweak });
     setContact(st.contact);
+    setPlayerMove({ move: st.move, left: st.left });
     const ic = INCOMING.find((x) => x.id === st.incoming);
     if (ic) {
       setIncId(ic.id);
@@ -305,7 +312,7 @@ export default function ShuttleLab() {
           )}
         </div>
         <div className="inset-label" style={{ left: inset.x, top: Math.max(0, inset.y - 24), width: inset.size }}>
-          特寫（真實大小）· 紅色羽毛＝睇轉速{mode === 'hit' ? ' · 主畫面球同拍放大 2.5 倍' : ''}
+          特寫（真實大小）· 紅色羽毛＝睇轉速{mode === 'hit' ? (showPlayer ? ' · 主畫面羽毛球放大 1.8 倍' : ' · 主畫面球同拍放大 2.5 倍') : ''}
         </div>
         <div className="legend3d">
           <span><i style={{ background: '#38bdf8' }} />速度／出球路線</span>
@@ -413,6 +420,19 @@ export default function ShuttleLab() {
               <Slider label="擊球點（離網）" value={contact.x} min={-6.5} max={-0.3} step={0.1} unit="m" onChange={(v) => { setStrokeId('custom'); setContact((c) => ({ ...c, x: v })); }} />
             </div>
 
+            <SpinTraining
+              swing={swing}
+              vIn={incomingVelocity(inc)}
+              imp={imp}
+              result={result}
+              spinDirection={spinDirection}
+              onLoad={applyStroke}
+              onSwing={(sw) => {
+                setStrokeId('custom');
+                setSwing(sw);
+              }}
+            />
+
             <div className="card">
               <h3>同一下揮拍，唔同來球</h3>
               <p className="muted small">拍點揮都一樣，只係來球方向唔同：</p>
@@ -510,7 +530,11 @@ export default function ShuttleLab() {
           <label className="check"><input type="checkbox" checked={disableGyro} onChange={(e) => setDisableGyro(e.target.checked)} />關閉陀螺效應</label>
           <label className="check"><input type="checkbox" checked={showForces} onChange={(e) => setShowForces(e.target.checked)} />顯示受力／拍面箭咀</label>
           <label className="check"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} />鏡頭跟住球</label>
-          <button className="btn ghost small" onClick={() => sceneRef.current?.resetView()}>重設視角</button>
+          {mode === 'hit' && <label className="check"><input type="checkbox" checked={showPlayer} onChange={(e) => setShowPlayer(e.target.checked)} />顯示 3D 球員（跟住步法同揮拍）</label>}
+          <div className="row">
+            <button className="btn ghost small" onClick={() => sceneRef.current?.resetView()}>全場視角</button>
+            {mode === 'hit' && <button className="btn ghost small" onClick={() => sceneRef.current?.focusHit()}>睇擊球位</button>}
+          </div>
         </div>
 
         <div className="card">

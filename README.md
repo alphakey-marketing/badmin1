@@ -3,8 +3,8 @@
 A web app with three parts:
 
 1. **動作教練 (Motion coach)** – reads your whole-body movement from the camera or an uploaded clip and checks it against reference angles for each stroke, including the **kinetic chain** (hips → shoulders → elbow → wrist).
-2. **示範動作 (Demo moves)** – a 3D mannequin performs split step, rear-court clear / jump smash / drop and the forehand net lunge with footwork, step-by-step cues, footprints and the racket-head path, viewable from any angle (right- or left-handed). It also appears inside the coach for the selected drill.
-3. **3D 擊球物理 (Shuttle physics lab)** – a 3D shuttlecock flight simulator that shows how **spin** changes the aerodynamics: turnover (flip), gyroscopic stability, spin drift and extra drag.
+2. **示範動作 (Demo moves)** – a 3D player performs 16 techniques with footwork: split step; rear-court clear, jump smash, drop, slice, round-the-head smash, backhand clear; forehand/backhand drive, defensive block; forehand/backhand net shot, net kill, lift; high serve and backhand low serve. Each step has a cue, the body part to focus on, the main muscle groups (highlighted on the body) and an angle check against reference ranges. `npm run check:moves` validates every pose (also run in CI).
+3. **3D 擊球物理 (Shuttle physics lab)** – including a 3D player who moves in and hits the shuttle, and a spin-control trainer (spin map over the cut angle, challenges with pass/fail). – a 3D shuttlecock flight simulator that shows how **spin** changes the aerodynamics: turnover (flip), gyroscopic stability, spin drift and extra drag.
 
 Everything runs in the browser. No video is uploaded anywhere.
 
