@@ -42,7 +42,9 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 in Chrome or Edge and allow camera access. Add `#lab` to the URL to open the physics lab directly.
+Open http://localhost:5173 in Chrome or Edge and allow camera access.
+
+Live preview: https://alphakey-marketing.github.io/badmin1/ (deployed from `main` by `.github/workflows/deploy-pages.yml`). Add `#lab` to the URL to open the physics lab directly.
 
 ```bash
 npm run build
