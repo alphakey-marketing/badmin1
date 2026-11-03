@@ -6,6 +6,7 @@ import { PART_LABEL, STATUS_COLOR, partStatus } from './bodyParts';
 import PoseOverlay from './PoseOverlay';
 import Skeleton3D from './Skeleton3D';
 import ChainTimeline from './ChainTimeline';
+import DemoView from '../demo/DemoView';
 import type { BodyPart, Check, DrillMode, Hand, Landmark, Phase, SwingReport } from './types';
 
 const MODES: Array<{ id: DrillMode; name: string; desc: string }> = [
@@ -23,6 +24,8 @@ const PHASE_LABEL: Record<Phase, string> = {
   swing: '揮拍！',
   follow: '隨揮',
 };
+
+const DEMO_FOR: Record<DrillMode, string> = { smash: 'smash', clear: 'clear', drop: 'drop', net: 'net', ready: 'split' };
 
 const PARTS: BodyPart[] = ['legs', 'weight', 'trunk', 'shoulder', 'elbow', 'wrist'];
 
@@ -56,6 +59,7 @@ export default function CoachView() {
   const [report, setReport] = useState<SwingReport | null>(null);
   const [history, setHistory] = useState<SwingReport[]>([]);
   const [show3D, setShow3D] = useState(true);
+  const [showDemo, setShowDemo] = useState(true);
   const analyzer = useRef(new MotionAnalyzer());
   const modeRef = useRef(mode);
   modeRef.current = mode;
@@ -203,6 +207,14 @@ export default function CoachView() {
               <button className={hand === 'left' ? 'on' : ''} onClick={() => setHand('left')}>左手</button>
             </div>
           </div>
+        </div>
+
+        <div className="card">
+          <h3>
+            示範：跟住做
+            <button className="btn ghost tiny" onClick={() => setShowDemo((v) => !v)}>{showDemo ? '收起' : '展開'}</button>
+          </h3>
+          {showDemo && <DemoView moveId={DEMO_FOR[mode]} hand={hand} compact />}
         </div>
 
         <div className="card">

@@ -2,19 +2,22 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 
 const CoachView = lazy(() => import('./coach/CoachView'));
 const ShuttleLab = lazy(() => import('./physics/ShuttleLab'));
+const DemoPage = lazy(() => import('./demo/DemoPage'));
 
-type Tab = 'coach' | 'lab';
+type Tab = 'coach' | 'demo' | 'lab';
+
+const fromHash = (): Tab => (location.hash === '#lab' ? 'lab' : location.hash === '#demo' ? 'demo' : 'coach');
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>(() => (location.hash === '#lab' ? 'lab' : 'coach'));
+  const [tab, setTab] = useState<Tab>(fromHash);
   useEffect(() => {
-    const onHash = () => setTab(location.hash === '#lab' ? 'lab' : 'coach');
+    const onHash = () => setTab(fromHash());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   const go = (t: Tab) => {
     setTab(t);
-    history.replaceState(null, '', t === 'lab' ? '#lab' : '#coach');
+    history.replaceState(null, '', `#${t}`);
   };
   return (
     <div className="app">
@@ -25,11 +28,12 @@ export default function App() {
         </div>
         <nav className="tabs">
           <button className={tab === 'coach' ? 'on' : ''} onClick={() => go('coach')}>動作教練</button>
-          <button className={tab === 'lab' ? 'on' : ''} onClick={() => go('lab')}>3D 旋轉物理</button>
+          <button className={tab === 'demo' ? 'on' : ''} onClick={() => go('demo')}>示範動作</button>
+          <button className={tab === 'lab' ? 'on' : ''} onClick={() => go('lab')}>3D 擊球物理</button>
         </nav>
       </header>
       <main className="main">
-        <Suspense fallback={<div className="loading">載入中…</div>}>{tab === 'coach' ? <CoachView /> : <ShuttleLab />}</Suspense>
+        <Suspense fallback={<div className="loading">載入中…</div>}>{tab === 'coach' ? <CoachView /> : tab === 'demo' ? <DemoPage /> : <ShuttleLab />}</Suspense>
       </main>
     </div>
   );

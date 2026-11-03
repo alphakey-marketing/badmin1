@@ -46,6 +46,16 @@ export interface ShuttleParams {
   disableGyro?: boolean;
   /** Start with the cork already in front (no flip), to compare. */
   noTurnover?: boolean;
+  /**
+   * Change in drag at the natural spin rate, in percent. Studies disagree
+   * (Kitta: about +8 %, others: −4 to −8 % or no change), so the default is 0.
+   */
+  spinDragPct?: number;
+  /**
+   * Launch state from a racket impact. Overrides speed/elevation/azimuth/spin/tumble/noTurnover.
+   * axis: shuttle axis (skirt → cork) at launch; omega: angular velocity (rad/s, world frame).
+   */
+  init?: { vel: Vector3; axis: Vector3; omega: Vector3 };
 }
 
 export interface Sample {
@@ -82,13 +92,13 @@ export interface SimResult {
 // ---- Physical constants -------------------------------------------------------
 const RHO = 1.2; // air density kg/m³
 const G = 9.81;
-const MASS = 0.0051; // 5.1 g
+export const MASS = 0.0051; // 5.1 g (rules: 4.74–5.50 g)
 const RADIUS = 0.034; // skirt radius (68 mm diameter)
 const AREA = Math.PI * RADIUS * RADIUS;
-const CD0 = 0.6; // aligned drag coefficient
+const CD0 = 0.5; // aligned drag coefficient -> terminal velocity ≈ 6.8 m/s (measured 6.5–6.9 m/s)
 const CN_SLOPE = 1.0; // skirt normal-force slope: how hard the air pushes a tilted skirt
-const I_AXIAL = 1.1e-6; // kg·m², about own axis (feathers sit near the rim)
-const I_TRANS = 2.2e-6; // kg·m², end-over-end
+export const I_AXIAL = 1.1e-6; // kg·m², about own axis (feathers sit near the rim)
+export const I_TRANS = 2.2e-6; // kg·m², end-over-end
 const CP_OFFSET = 0.025; // centre of pressure sits this far behind the centre of mass (m)
 const ROT_DAMPING = 8e-6; // aerodynamic damping of axis rotation (per m/s)
 const SPIN_LENGTH = 3; // metres of travel for spin to settle on its natural rate
@@ -104,17 +114,14 @@ export const COURT = {
 interface TypeProps {
   /** Natural spin, revolutions per metre travelled. */
   spinPerMetre: number;
-  /** Extra drag at the natural spin rate (skirt opens). */
-  spinDrag: number;
   /** Skirt squeezes at high speed (nylon) -> less drag. */
   deform: (speed: number) => number;
 }
 
 const TYPE: Record<ShuttleType, TypeProps> = {
-  feather: { spinPerMetre: 2.5, spinDrag: 0.08, deform: () => 1 },
+  feather: { spinPerMetre: 2.5, deform: () => 1 },
   nylon: {
     spinPerMetre: 1.0,
-    spinDrag: 0.03,
     deform: (v) => 1 - 0.25 * Math.min(1, Math.max(0, (v - 15) / 45)),
   },
 };
@@ -137,12 +144,14 @@ export function simulate(p: ShuttleParams): SimResult {
   const dir = new Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize();
 
   const pos = new Vector3(p.x0, p.y0, p.z0);
-  const vel = dir.clone().multiplyScalar(p.speed);
+  const vel = p.init ? p.init.vel.clone() : dir.clone().multiplyScalar(p.speed);
 
   // Initial orientation: at impact the cork points back at the racket.
   // A small tilt (8°) breaks the perfect symmetry so the flip can start.
   const quat = new Quaternion();
-  if (p.noTurnover) {
+  if (p.init) {
+    quat.setFromUnitVectors(UP, p.init.axis.clone().normalize());
+  } else if (p.noTurnover) {
     quat.setFromUnitVectors(UP, dir);
   } else {
     const back = dir.clone().negate();
@@ -154,10 +163,12 @@ export function simulate(p: ShuttleParams): SimResult {
   }
 
   const axis = UP.clone().applyQuaternion(quat);
-  let spin = p.spinRps * TWO_PI; // rad/s about axis
+  let spin = p.init ? p.init.omega.dot(axis) : p.spinRps * TWO_PI; // rad/s about axis
   // Transverse angular velocity (end-over-end tumble), perpendicular to axis.
   const wt = new Vector3();
-  if (p.tumbleRps !== 0) {
+  if (p.init) {
+    wt.copy(p.init.omega).addScaledVector(axis, -spin);
+  } else if (p.tumbleRps !== 0) {
     const tumbleAxis = new Vector3().crossVectors(axis, UP);
     if (tumbleAxis.lengthSq() < 1e-6) tumbleAxis.set(0, 0, 1);
     tumbleAxis.normalize();
@@ -212,8 +223,13 @@ export function simulate(p: ShuttleParams): SimResult {
 
     // --- Forces ---
     const naturalSpin = tp.spinPerMetre * TWO_PI * speed * p.spinDriveScale; // rad/s
-    const spinRatio = naturalSpin > 1 ? Math.min(2, Math.abs(spin) / naturalSpin) : Math.min(2, Math.abs(spin) / 60);
-    const cd = CD0 * tp.deform(speed) * (1 + 1.2 * sinA * sinA) * (1 + tp.spinDrag * spinRatio);
+    const ref = Math.max(naturalSpin, 60);
+    const spinRatio = Math.min(2, Math.abs(spin) / ref);
+    // Spin against the feathers' natural direction (e.g. a left-hander's slice) brakes the shuttle more
+    // (Collet 2026 observed this). The +15 % size is this model's assumption.
+    const reverse = Math.min(1, Math.max(0, (-p.spinDirection * spin) / ref));
+    const cd =
+      CD0 * tp.deform(speed) * (1 + 1.2 * sinA * sinA) * (1 + ((p.spinDragPct ?? 0) / 100) * spinRatio) * (1 + 0.15 * reverse);
     lastCd = cd;
     drag.copy(vhat).multiplyScalar(-q * cd * speed * speed);
 
@@ -339,8 +355,8 @@ export const SHOT_PRESETS: ShotPreset[] = [
   {
     id: 'slice',
     name: '劈吊（切球）',
-    hint: '拍面斜切，出手時已經帶強烈自旋同少少側向。',
-    params: { speed: 22, elevation: 2, azimuth: 5, x0: -4.5, y0: 2.6, z0: -0.6, spinRps: 60, tumbleRps: 0 },
+    hint: '拍面斜切，出手時已經帶強烈自旋（研究量到約 125–166 轉/秒）同少少側向。',
+    params: { speed: 22, elevation: 2, azimuth: 5, x0: -4.5, y0: 2.6, z0: -0.6, spinRps: 140, tumbleRps: 0 },
   },
   {
     id: 'tumble',

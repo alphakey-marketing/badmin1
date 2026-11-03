@@ -91,3 +91,51 @@ export function createShuttle(opts: { highlight?: boolean } = {}): THREE.Group {
 
   return group;
 }
+
+/**
+ * Badminton racket (real size: head ≈ 23 × 20 cm, total length 67.5 cm).
+ * Local frame: head centre at the origin, strings in the x–y plane, face normal = +Z,
+ * shaft and handle along −Y.
+ */
+export function createRacket(): THREE.Group {
+  const g = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.35, metalness: 0.4 });
+  const stringMat = new THREE.LineBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.7 });
+  const handleMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 });
+  const faceMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.12, side: THREE.DoubleSide });
+
+  const a = 0.1; // half width
+  const b = 0.115; // half length
+  const ring = new THREE.EllipseCurve(0, 0, a, b, 0, Math.PI * 2, false, 0);
+  const pts = ring.getPoints(64).map((p) => new THREE.Vector3(p.x, p.y, 0));
+  const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 80, 0.006, 6, true);
+  g.add(new THREE.Mesh(tube, frameMat));
+
+  // Strings
+  const s: number[] = [];
+  for (let i = -9; i <= 9; i++) {
+    const x = (i / 10) * a;
+    const h = b * Math.sqrt(Math.max(0, 1 - (x * x) / (a * a)));
+    s.push(x, -h, 0, x, h, 0);
+  }
+  for (let i = -10; i <= 10; i++) {
+    const y = (i / 11) * b;
+    const w = a * Math.sqrt(Math.max(0, 1 - (y * y) / (b * b)));
+    s.push(-w, y, 0, w, y, 0);
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(s, 3));
+  g.add(new THREE.LineSegments(sg, stringMat));
+  const face = new THREE.Mesh(new THREE.CircleGeometry(1, 40), faceMat);
+  face.scale.set(a, b, 1);
+  g.add(face);
+
+  // Shaft + handle
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.27, 8), frameMat);
+  shaft.position.y = -b - 0.135;
+  g.add(shaft);
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.012, 0.2, 10), handleMat);
+  handle.position.y = -b - 0.27 - 0.1;
+  g.add(handle);
+  return g;
+}
