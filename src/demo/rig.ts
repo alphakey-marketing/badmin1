@@ -215,7 +215,9 @@ export function poseAt(keys: Key[], t: number): Pose {
     const p0 = a0[j], p2 = a2[j], p3 = a3[j];
     const m1 = 0.5 * (p2 - p0) * 0.6;
     const m2 = 0.5 * (p3 - p1) * 0.6;
-    return (2 * u3 - 3 * u2 + 1) * p1 + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * m2;
+    const v = (2 * u3 - 3 * u2 + 1) * p1 + (u3 - 2 * u2 + u) * m1 + (-2 * u3 + 3 * u2) * p2 + (u3 - u2) * m2;
+    // No overshoot: stay between the two key values (real joints don't dip past both neighbouring poses).
+    return Math.min(Math.max(p1, p2), Math.max(Math.min(p1, p2), v));
   });
   const pose = unflatten(out);
   // Planted feet must not slide: if both keys plant a foot at the same spot, keep it exact.

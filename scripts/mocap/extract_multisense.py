@@ -138,7 +138,7 @@ def metrics(clip, k, hand):
     side = "Right" if hand == "right" else "Left"
     other = "Left" if side == "Right" else "Right"
     lo, hi = max(0, k - int(0.3 * FPS)), min(len(clip), k + int(0.15 * FPS) + 1)
-    pre = range(max(0, k - int(0.8 * FPS)), k + 1)
+    pre = range(max(0, k - int(0.4 * FPS)), k + 1)  # loading phase: last 0.4 s before contact
     rel = clip[:, J[f"{side} Hand"]] - clip[:, J["Hips"]]
     speed = np.linalg.norm(np.diff(rel, axis=0), axis=1) * FPS
     return {

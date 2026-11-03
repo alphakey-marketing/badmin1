@@ -136,10 +136,10 @@ const SPLIT: Move = {
 type OverKind = 'clear' | 'smash' | 'drop' | 'slice';
 
 const OVER = {
-  clear: { name: '後場正手高遠球', elbow: 165, dir: [0.1, 1, 0.12] as Vec, rdir: [0.12, 1, 0] as Vec, face: [0.7, 0.7, 0] as Vec, lean: 2, jump: 0.05, out: [1, 0.6, -0.05] as Vec, knee: [110, 145, '高遠球參考：110–145°'] as const, cElbow: [155, 180, '高遠球研究：擊球時手臂接近伸直'] as const },
-  smash: { name: '後場正手（跳）殺球', elbow: 150, dir: [0.45, 1, 0.12] as Vec, rdir: [0.65, 0.75, 0] as Vec, face: [1, -0.3, 0] as Vec, lean: 10, jump: 0.12, out: [1, -0.22, -0.05] as Vec, knee: [100, 130, '殺球研究：蓄力約 110°'] as const, cElbow: [140, 165, '殺球研究：擊球約 148°'] as const },
-  drop: { name: '後場正手吊球', elbow: 145, dir: [0.35, 1, 0.12] as Vec, rdir: [0.5, 0.85, 0] as Vec, face: [0.95, 0.25, 0] as Vec, lean: 4, jump: 0.04, out: [1, 0.05, -0.05] as Vec, knee: [110, 145, '吊球參考：110–145°'] as const, cElbow: [130, 160, '吊球研究：比殺球略屈'] as const },
-  slice: { name: '後場劈吊（切球）', elbow: 148, dir: [0.4, 1, 0.12] as Vec, rdir: [0.6, 0.78, -0.1] as Vec, face: [1, -0.05, 0.3] as Vec, lean: 6, jump: 0.04, out: [1, -0.05, -0.3] as Vec, knee: [100, 140, '殺／吊參考'] as const, cElbow: [135, 165, '同殺球相近'] as const },
+  clear: { name: '後場正手高遠球', elbow: 160, dir: [0.1, 1, 0.12] as Vec, rdir: [0.12, 1, 0] as Vec, face: [0.7, 0.7, 0] as Vec, lean: 2, jump: 0.05, out: [1, 0.6, -0.05] as Vec, knee: [132, 146, '專家動作捕捉：MultiSenseBadminton 5 位專家中間 50%（中位數 139°）'] as const, cElbow: [154, 175, '專家動作捕捉：MultiSenseBadminton 5 位專家中間 50%（中位數 167°）'] as const, load: 141 },
+  smash: { name: '後場正手（跳）殺球', elbow: 150, dir: [0.45, 1, 0.12] as Vec, rdir: [0.65, 0.75, 0] as Vec, face: [1, -0.3, 0] as Vec, lean: 10, jump: 0.12, out: [1, -0.22, -0.05] as Vec, knee: [100, 130, '殺球研究：蓄力約 110°'] as const, cElbow: [140, 165, '殺球研究：擊球約 148°'] as const, load: 117 },
+  drop: { name: '後場正手吊球', elbow: 145, dir: [0.35, 1, 0.12] as Vec, rdir: [0.5, 0.85, 0] as Vec, face: [0.95, 0.25, 0] as Vec, lean: 4, jump: 0.04, out: [1, 0.05, -0.05] as Vec, knee: [110, 145, '吊球參考：110–145°'] as const, cElbow: [130, 160, '吊球研究：比殺球略屈'] as const, load: 128 },
+  slice: { name: '後場劈吊（切球）', elbow: 148, dir: [0.4, 1, 0.12] as Vec, rdir: [0.6, 0.78, -0.1] as Vec, face: [1, -0.05, 0.3] as Vec, lean: 6, jump: 0.04, out: [1, -0.05, -0.3] as Vec, knee: [100, 140, '殺／吊參考'] as const, cElbow: [135, 165, '同殺球相近'] as const, load: 122 },
 };
 
 function overhead(kind: OverKind): Move {
@@ -184,7 +184,7 @@ function overhead(kind: OverKind): Move {
         footL: foot(-1.65, 0.75, 50), footR: foot(-2.3, 1.15, 85),
         ...arm([-0.35, 0.55, 0.8], 82, [-0.55, -0.7, 0.25], [0, 0, 1], [-0.4, 0.6, 1]),
         handL: hand('L', [0.5, 0.85, -0.2], 165), elbowL: [0.2, 0, -1],
-      }, ['R', 117]),
+      }, ['R', o.load]),
     },
     // Drive: push off the back leg; hips turn first, chest lags (twist)
     {
@@ -254,7 +254,7 @@ function overhead(kind: OverKind): Move {
       { t: 0.4, title: '轉身側身', cue: '右腳向右後方踏，身體轉側（左肩向網），球拍同手肘舉高。', focus: 'hips', muscles: ['glutes', 'core'] },
       { t: 0.72, title: '并步後退', cue: '左腳靠近右腳（并步），右腳再向後踏。唔好打交叉腳。', focus: 'legs', muscles: ['quads', 'calves'] },
       {
-        t: 1.2, title: '蓄力', cue: '重心落喺後腳（右腳）屈膝；左手舉高指住球；手肘抬高，拍頭落到背後。', focus: 'legs', muscles: ['quads', 'glutes', 'deltoid'],
+        t: 1.36, title: '蓄力', cue: '重心落喺後腳（右腳）屈膝；左手舉高指住球；手肘抬高，拍頭落到背後。', focus: 'legs', muscles: ['quads', 'glutes', 'deltoid'],
         checks: [C.loadKnee(o.knee[0], o.knee[1], o.knee[2]), C.backElbow],
       },
       { t: 1.5, title: '蹬地轉髖', cue: '後腳蹬地，髖部先轉向網，肩膊仲未轉（拉開髖肩夾角）。', focus: 'hips', muscles: ['glutes', 'calves', 'core'] },
@@ -418,14 +418,14 @@ const BACKHAND_CLEAR: Move = (() => {
 function drive(backhand: boolean): Move {
   const s = backhand ? -1 : 1;
   const CT = 0.88;
-  const R: Foot = backhand ? foot(0.35, -0.6, -40) : foot(-0.05, 0.75, 55);
-  const L: Foot = backhand ? foot(-0.1, -0.15, -20) : foot(0.05, -0.2, 5);
+  const R: Foot = backhand ? foot(0.15, -0.38, -40) : foot(-0.05, 0.75, 55);
+  const L: Foot = backhand ? foot(-0.08, -0.15, -20) : foot(0.05, -0.2, 5);
   const base = { x: 0.05, z: 0.3 * s, yaw: 35 * s, lean: 10, footL: L, footR: R };
   const prep = backhand
     ? arm([0.6, 0.15, -0.8], 90, [-0.25, 0.5, -0.6], [1, 0, 0], [0.6, 0.3, 1])
     : arm([-0.2, 0.05, 1], 95, [-0.5, 0.55, 0.55], [1, 0, 0], [-0.2, -0.3, 1]);
   const hit = backhand
-    ? arm([0.85, 0.05, -0.45], 140, [0.75, 0.25, -0.25], [1, 0, 0], [0.4, 0.2, 1])
+    ? arm([0.85, 0.05, -0.45], 157, [0.75, 0.25, -0.25], [1, 0, 0], [0.4, 0.2, 1])
     : arm([0.6, 0.02, 0.75], 135, [0.8, 0.2, 0.35], [1, 0, 0], [-0.2, -0.3, 1]);
   const follow = backhand
     ? arm([0.8, 0.1, 0.35], 130, [0.5, 0.35, 0.7])
@@ -443,17 +443,17 @@ function drive(backhand: boolean): Move {
     shuttleOut: [1, 0.05, 0],
     keys: [
       { t: 0, pose: READY },
-      { t: 0.25, pose: SPLIT_LAND },
-      { t: 0.68, pose: P({ ...base, ...prep }, ['R', 128]) },
-      { t: CT, pose: P({ ...base, yaw: 25 * s, ...hit }, ['R', 128]) },
+      { t: backhand ? 0.2 : 0.25, pose: SPLIT_LAND },
+      { t: backhand ? 0.5 : 0.68, pose: P({ ...base, ...prep }, ['R', backhand ? 140 : 128]) },
+      { t: CT, pose: P({ ...base, yaw: 25 * s, ...hit }, ['R', backhand ? 142 : 128]) },
       { t: 1.2, pose: P({ ...base, yaw: 15 * s, ...follow }, ['R', 132]) },
       { t: 1.6, pose: READY },
       { t: 2.0, pose: READY },
     ],
     steps: [
       { t: 0, title: '分腿跳', cue: '睇到平飛球。', focus: 'legs', muscles: ['calves'] },
-      { t: 0.66, title: backhand ? '右腳踏左前' : '右腳踏右側', cue: backhand ? '右腳向左前方踏，重心落右腳，拍收喺身前（手肘抬起）。' : '右腳向右邊踏，重心落右腳，球拍收喺身側、手肘屈。', focus: 'legs', muscles: ['quads', 'glutes'], checks: [{ label: '承重膝頭', metric: 'kneeR', min: 110, max: 150, unit: '°', ref: '教練建議' }] },
-      { t: CT, title: '擊球', cue: backhand ? '拇指頂拍柄，前臂短促外旋推出，擊球點喺身前。' : '喺肩膊高度身前擊球，前臂內旋，短促發力，唔好大揮拍。', focus: 'wrist', muscles: ['forearm', 'fingers', 'triceps'], checks: [{ label: '擊球時手肘', metric: 'elbowR', min: 115, max: 155, unit: '°', ref: '教練建議：手肘微屈' }, { label: '拍頭高度', metric: 'racketHeadY', min: 1.1, max: 1.9, unit: 'm', ref: '教練建議：大約肩膊高度' }] },
+      { t: backhand ? 0.5 : 0.66, title: backhand ? '右腳踏左前' : '右腳踏右側', cue: backhand ? '右腳向左前方踏，重心落右腳，拍收喺身前（手肘抬起）。' : '右腳向右邊踏，重心落右腳，球拍收喺身側、手肘屈。', focus: 'legs', muscles: ['quads', 'glutes'], checks: [backhand ? { label: '承重膝頭', metric: 'kneeR', min: 132, max: 152, unit: '°', ref: '專家動作捕捉：MultiSenseBadminton 5 位專家中間 50%（中位數 143°）' } : { label: '承重膝頭', metric: 'kneeR', min: 110, max: 150, unit: '°', ref: '教練建議' }] },
+      { t: CT, title: '擊球', cue: backhand ? '拇指頂拍柄，前臂短促外旋推出，擊球點喺身前。' : '喺肩膊高度身前擊球，前臂內旋，短促發力，唔好大揮拍。', focus: 'wrist', muscles: ['forearm', 'fingers', 'triceps'], checks: [backhand ? { label: '擊球時手肘', metric: 'elbowR', min: 146, max: 168, unit: '°', ref: '專家動作捕捉：MultiSenseBadminton 5 位專家中間 50%（中位數 158°）' } : { label: '擊球時手肘', metric: 'elbowR', min: 115, max: 155, unit: '°', ref: '教練建議：手肘微屈' }, { label: '拍頭高度', metric: 'racketHeadY', min: 1.1, max: 1.9, unit: 'm', ref: '教練建議：大約肩膊高度' }] },
       { t: 1.2, title: '收拍回中', cue: '短隨揮即刻收拍，準備下一球。', focus: 'legs', muscles: ['quads'] },
     ],
   };

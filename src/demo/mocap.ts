@@ -31,12 +31,22 @@ export interface MocapClip {
   summary?: { elbowAtContact?: number; minRacketSideKneeBeforeContact?: number };
 }
 
+export interface MocapStat {
+  median: number;
+  q1: number;
+  q3: number;
+  perSubject?: Record<string, number>;
+}
+
 export interface MocapIndexEntry {
   stroke: string;
   file: string;
   subject?: string;
   skill?: string;
   count?: number;
+  subjects?: string[];
+  /** Across all strokes kept: elbowMaxNearContact, minRacketKneeBefore, minOtherKneeBefore, … */
+  stats?: Record<string, MocapStat>;
 }
 
 const base = () => import.meta.env?.BASE_URL ?? './';
