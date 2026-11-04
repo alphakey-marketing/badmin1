@@ -106,19 +106,52 @@
 
 ---
 
-## Phase 0 – 資料格式（約 1–2 日）
+## 開始前的調整（第二次檢查後加入）
 
-先定好資料格式，之後每個 phase 都用同一個。
+以下問題如果遲啲先改，會要重寫資料或者介面，所以喺 Phase 0–1 就處理：
+
+### 技術設定
+1. **未有測試工具**：repo 而家只有 `check:moves` 腳本，冇 unit test。Phase 0 加 `vitest`（同 Vite 同一套設定），`npm test` 加入 CI。
+2. **資料格式一開始就支援雙打**：好多想學的職業比賽係雙打。`Player` 改為 4 個位（`A1 A2 B1 B2`，單打只用 `A1 B1`），之後唔使轉換舊資料。
+3. **位置用「擊球者自己半場」座標**：球員每局換邊，如果用絕對座標，「A 喺後場正手位打」就要逐局轉換。改為：每個點都相對於嗰個球員自己半場（後場 = 負數 y），另外記錄每局邊個喺近鏡頭嗰邊。記錄球員左手定右手，先分得出正手/反手位。
+4. **YouTube 播放器搶鍵盤**：如果撳咗 YouTube 畫面，`空格`、`←/→` 會畀 YouTube 自己接收（例如跳 5 秒），快捷鍵會失靈。做法：`controls=0`、`disablekb=1`，播放器上面蓋一層透明 div 接收點擊，焦點永遠留喺 app。
+5. **YouTube 唔可以逐格前後**：IFrame API 冇「下一格」功能。改為 `←/→` 跳 ±0.1 秒，`Shift+←/→` 跳 ±1 秒；標記擊球時間大約準確到 0.1 秒，Phase 1 統計已經夠用。
+6. **部分影片唔准嵌入**：有啲頻道關咗嵌入、或者係年齡限制片（播放器 error 101/150）。要清楚提示「呢條片唔准喺其他網站播放」，建議改用本地檔案；唔好顯示一個空白畫面。
+7. **YouTube 廣告**：片中廣告播放時要暫停標記同自動分析（播放器狀態會變），唔好將廣告時間計入。
+8. **畫面擷取會影到自己的疊加圖**：Phase 2 擷取 tab 畫面時，如果骨架、球場線畫喺播放器上面，AI 會分析到自己畫的嘢。做法：Chrome 支援 Element Capture（`RestrictionTarget`）時只擷取播放器本身；否則分析期間將疊加圖畫喺播放器旁邊／下面的 canvas。另外 tab 要保持喺前面，切走咗瀏覽器會降低幀率，要提示用戶。
+9. **資料版本**：`MatchFile.version` 加讀檔時的升級函數（`migrate()`），之後改格式都讀到舊檔。
+
+### 容易使用
+1. **兩種標記深度**：逐拍標記一場比賽（約 80 分 × 10 拍 = 800 拍）好花時間。加「快速模式」：每一分只標**最後一拍**（邊個贏、咩球、打去邊、原因），一場比賽大約 15–20 分鐘就做完，已經有「點樣贏分/輸分」統計。之後有興趣先揀幾分做「完整模式」逐拍標記。
+2. **手機都用得**：手機冇鍵盤，所以加大按鈕：球種按鈕排喺球場圖旁邊，撳球場圖就記落點。桌面就鍵盤 + 滑鼠。
+3. **球場圖跟住畫面方向**：用戶直接撳「睇落去」嘅位置（近鏡頭 = 球場圖下面），app 自己轉換做球員座標，唔使用戶諗邊個喺邊邊。每局自動換邊，第三局 11 分時都會提示換邊。
+4. **球種先用簡單版**：初學者分唔清 slice drop 同 drop。預設 6 種（殺、高遠、吊、網前、挑、平抽），進階可以開完整清單。
+5. **還原同修改**：`Ctrl+Z` 還原；擊球列表可以直接改球種、擊球者、刪除。
+6. **一開始就有範例**：放一場已經標記好的範例比賽（只有 JSON + YouTube ID），第一次打開就見到統計長咩樣，再加快捷鍵教學提示。
+7. **學習模式（加入 Phase 1 尾）**：揀一個球路情境（例如「對手挑後場之後」），app 播放到擊球前暫停，你先估職業球員會打去邊，然後播出答案同統計。呢個比淨係睇數字更容易學到戰術。
+8. **統計要講「點做」**：每一條統計都附一句中文解釋同「你可以試」，唔好淨係出數字。
+
+---
+
+## Phase 0 – 資料格式 + 開發設定（約 2–3 日）
+
+先定好資料格式，之後每個 phase 都用同一個。同時加 `vitest`，放一個範例 `MatchFile`。
 
 ```ts
-type Player = 'A' | 'B';            // 單打先；雙打留到 Phase 6
+/** 單打只用 A1 / B1。 */
+type Player = 'A1' | 'A2' | 'B1' | 'B2';
+type Team = 'A' | 'B';
 type ShotType =
   | 'serve_short' | 'serve_long'
   | 'clear' | 'smash' | 'drop' | 'slice_drop'
   | 'drive' | 'push' | 'block'
   | 'net' | 'net_kill' | 'lift' | 'other';
 
-/** 球場座標，米。原點 = 球場中心，x = 闊度 (−3.05…3.05)，y = 長度 (−6.7…6.7)，A 永遠喺 y < 0 嗰邊。 */
+/**
+ * 球場座標，米，相對於「嗰個球員自己的半場」：
+ * 原點 = 網中間，y < 0 = 自己半場（−6.7 = 自己底線），y > 0 = 對手半場；
+ * x > 0 = 球員面向網時的右邊。正手/反手位用 `handedness` 判斷。
+ */
 interface CourtPoint { x: number; y: number; }
 
 interface Shot {
@@ -126,8 +159,8 @@ interface Shot {
   hitter: Player;
   type: ShotType;
   hand?: 'forehand' | 'backhand' | 'overhead';
-  hitPos?: CourtPoint;       // 擊球位置（球員腳下）
-  landPos?: CourtPoint;      // 落點 / 下一個人接球的位置
+  hitPos?: CourtPoint;       // 擊球位置（球員腳下，擊球者座標）
+  landPos?: CourtPoint;      // 落點（擊球者座標，所以 y > 0）
   source: 'manual' | 'auto' | 'auto-confirmed';
 }
 
@@ -135,17 +168,22 @@ interface Rally {
   id: string;
   start: number; end: number;
   server: Player;
+  /** 快速模式只有最後一拍；完整模式有齊所有拍。 */
+  detail: 'quick' | 'full';
   shots: Shot[];
-  winner: Player;
+  winner: Team;
   endReason: 'winner' | 'forced_error' | 'unforced_error' | 'out' | 'net' | 'fault';
-  score: [number, number];   // 呢分之前嘅比分
+  score: [number, number];   // 呢分之前嘅比分 [A, B]
   game: number;
 }
 
 interface MatchFile {
   version: 1;
   title: string;             // 例：「2025 全英賽 男單決賽」
-  players: { A: string; B: string };
+  discipline: 'MS' | 'WS' | 'MD' | 'WD' | 'XD';
+  players: Partial<Record<Player, { name: string; handedness: 'right' | 'left' }>>;
+  /** 每局開始時邊隊喺近鏡頭嗰邊（第三局 11 分換邊自動計）。 */
+  nearSide: Record<number, Team>;
   video: { kind: 'file'; name: string } | { kind: 'youtube'; id: string };
   court?: CourtCalibration;  // Phase 2，第一次校準（主鏡頭模板）
   segments?: Segment[];      // 鏡頭片段；Phase 1 只有人手標的「重播」
@@ -161,7 +199,7 @@ interface Segment {
 }
 ```
 
-**完成標準**：型別寫好；`scripts/validate-match.ts` 可以檢查一個範例檔；CI 有跑。
+**完成標準**：型別寫好；`migrate()` 寫好；`npm test`（vitest）同 `scripts/validate-match.ts` 都喺 CI 跑；有一個範例檔 `public/matches/sample.match.json`。
 
 ---
 
@@ -171,15 +209,21 @@ interface Segment {
 
 ### 影片來源
 - **YouTube 連結（主要方式）**：貼連結（支援 `youtube.com/watch?v=`、`youtu.be/`、`/live/`、有 `t=` 時間的連結），用 YouTube IFrame Player API 播放、暫停、跳時間、改速度（0.25×–2×）。標記時間用播放器的 `getCurrentTime()`。標記檔（JSON）可以分享，對方自己開 YouTube 就睇到。
+  - 設定 `controls=0`、`disablekb=1`，加透明遮罩，令快捷鍵唔會畀 YouTube 搶走（見「開始前的調整」）。
+  - 處理唔准嵌入（error 101/150）同廣告。
+- **開始畫面**：貼連結 → 揀單打/雙打 → 輸入球員名同左右手 → 揀「快速模式」或「完整模式」→ 開始。
 - **本地檔案**：用現有 `src/coach/useVideoSource.ts` 的上載方式。
 - 同一條 YouTube 片再開會自動載入之前的標記（用影片 ID 做 key）。
 
 ### 標記介面（`TaggingPanel.tsx`）
-- 影片下面放一個 2D 球場圖（`CourtMap.tsx`）。
-- 鍵盤快捷鍵，令標記一場比賽可以喺比賽時間 1.5–2 倍內完成：
-  - `空格` 播放/暫停，`←/→` 前後一格，`,` `.` 慢速播放
+- 影片下面放一個 2D 球場圖（`CourtMap.tsx`），方向同畫面一樣（近鏡頭 = 下面）。
+- **快速模式**：每一分只標最後一拍。一場比賽大約 15–20 分鐘。
+- **完整模式**：逐拍標記，大約係比賽時間 1.5–2 倍。可以一場入面只揀幾分做完整模式。
+- 手機用大按鈕（球種按鈕 + 撳球場圖）；桌面用鍵盤快捷鍵：
+  - `空格` 播放/暫停，`←/→` ±0.1 秒，`Shift+←/→` ±1 秒，`,` `.` 慢速/正常速度
   - `S` 開始一分（記錄發球方）
-  - 擊球時撳一個鍵選球種（例：`1` 殺球、`2` 高遠、`3` 吊球、`4` 網前、`5` 挑球、`6` 平抽…），再喺球場圖上撳落點
+  - 擊球時撳一個鍵選球種（簡單版：`1` 殺球、`2` 高遠、`3` 吊球、`4` 網前、`5` 挑球、`6` 平抽；進階版有齊所有球種），再喺球場圖上撳落點
+  - `Ctrl+Z` 還原；擊球列表可以直接修改
   - `W` + `A/B` 結束一分，揀結束原因
   - `R` 開始/結束「重播」片段（之後播放時自動跳過；同一分唔會標兩次）
 - 系統自動交替擊球者（A → B → A…），只需要改錯。
@@ -192,8 +236,19 @@ interface Segment {
 - **落點圖**：每種球打去邊個區域（球場分 9 格：前/中/後 × 左/中/右）。
 - **最後一拍分析**：贏分/輸分的最後一拍係咩球、喺邊度打。
 - 回合列表：撳一下跳去影片嗰一分。可篩選（例：「所有 A 殺球得分」→ 連續播放）。
+- 每條統計附一句中文解釋同「你可以試」建議。快速模式數據只顯示佢計得到的統計，其他就灰色顯示「需要完整模式」。
 
-**完成標準**：可以完整標記一場比賽、重開頁面資料仍在、統計數字同手算一致（`stats.ts` 有單元測試）。
+### 學習模式（Phase 1 尾）
+- 揀一個情境（例：「對手挑後場之後」、「接發球」），app 由已標記的回合中搵出例子。
+- 播放到擊球前暫停 → 你喺球場圖撳你估佢會打去邊 → 播出答案 → 最後顯示你估中幾多、職業球員通常點揀。
+
+### 第一次使用
+- 打開就見到範例比賽同佢的統計；一個「試吓標記」按鈕帶你標記 3 分，順便教快捷鍵。
+
+**完成標準**：
+- 快速模式標記一場比賽 ≤ 20 分鐘；完整模式可以完整標記一場。
+- 手機同桌面都用得；YouTube 畫面被撳過之後快捷鍵仍然有效。
+- 重開頁面資料仍在；統計數字同手算一致（`stats.ts` 有 vitest 測試）。
 
 ---
 
@@ -203,7 +258,8 @@ interface Segment {
 
 ### 2a 由 YouTube 攞畫面（`tabCapture.ts`）
 - 撳「自動分析」→ `getDisplayMedia({ video: true, preferCurrentTab: true })` → 用戶允許分享呢個 tab。
-- 用 Region Capture（`CropTarget.fromElement(播放器)`）只保留播放器嗰格；唔支援的瀏覽器就用播放器喺頁面的位置自己裁。
+- 優先用 Element Capture（`RestrictionTarget`），只擷取播放器本身，唔會擷取到疊喺上面的骨架/球場線；其次用 Region Capture（`CropTarget`），咁就要將疊加圖畫喺播放器以外；再唔支援就用播放器喺頁面的位置自己裁。
+- 分析期間要保持呢個 tab 喺前面；偵測到 `visibilitychange` 就暫停並提示。
 - 擷取到的 stream 放入一個隱藏 `<video>`，再交畀現有 `usePose.ts`（佢本身已經係讀 `<video>`）。
 - 時間對齊：每一格用 YouTube 播放器的 `getCurrentTime()` 記時間，唔用擷取的時間，咁樣暫停、跳時間都唔會亂。
 - 可以揀分析速度（1× / 0.5× / 0.25×）：越慢越多格、越準，但要花更長時間。
@@ -219,7 +275,7 @@ interface Segment {
 - 之後每個主鏡頭片段用偵測到的球場線微調一次 homography（存喺 `Segment.homography`），應付鏡頭輕微移動或 zoom。
 
 ### 2d 球員追蹤
-- 現有 `usePose.ts` 設 `numPoses: 1`；改成可設定 `numPoses: 2`。
+- 現有 `usePose.ts` 設 `numPoses: 1`；改成可設定 `numPoses: 2`（雙打 4）。
 - 每個人取兩隻腳踝中點 → 經 homography → 球場座標。
 - 用位置分 A/B：網的哪一邊就係邊個（換邊時自動對調）。
 - 簡單平滑（現有 `smooth()`）+ 去除跳點。
@@ -298,7 +354,7 @@ interface Segment {
 
 ## Phase 6 – 雙打、資料庫同分享（之後）
 
-- **雙打**：4 個球員（`numPoses: 4`）、站位模式（前後站 vs 左右站）、輪轉分析。
+- **雙打分析**：資料格式同人手標記由 Phase 0–1 已經支援；呢度加站位模式（前後站 vs 左右站）、輪轉分析。
 - **比賽資料庫**：預先標記好幾場經典比賽的 `MatchFile`（只有 JSON 同 YouTube ID，冇影片）放喺 `public/matches/`，打開就可以學。
 - **分享**：匯出標記檔畀朋友 / 教練；匯出統計圖做 PNG。
 - **球員檔案**：同一個球員多場比賽合併統計。
@@ -319,8 +375,8 @@ interface Segment {
 
 | Phase | 內容 | 時間 | 完成後可以做到 |
 |---|---|---|---|
-| 0 | 資料格式 | 1–2 日 | – |
-| 1 | 貼 YouTube 連結 + 人手標記 + 統計 | 1–2 星期 | **開始學戰術** ⭐（任何裝置） |
+| 0 | 資料格式（單打+雙打）+ vitest + 範例檔 | 2–3 日 | – |
+| 1 | 貼 YouTube 連結 + 快速/完整標記 + 統計 + 學習模式 | 2–3 星期 | **開始學戰術** ⭐（手機同電腦） |
 | 2 | 畫面擷取 + 鏡頭偵測 + 校準 + 球員追蹤 | 3 星期 | YouTube 自動分析（桌面）、走位熱圖 |
 | 3 | 自動偵測擊球 | 1–2 星期 | 標記快一倍 |
 | 4 | 羽毛球軌跡（可選） | 3–4 星期 | 自動落點、連接物理 tab |
