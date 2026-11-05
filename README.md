@@ -8,6 +8,8 @@ A web app with three parts:
 
 Everything runs in the browser. No video is uploaded anywhere.
 
+The **示範動作 → 戴資穎真人影片** view includes a 16-move study catalog: 8 moves have manually reviewed broadcast frame sequences with approximate timestamps, player identification, observations and limitations; 8 remain explicitly pending. Load official BWF YouTube excerpts on demand or open the original source. These are video references, not Tai Tzu Ying motion-capture data or coach-validated technique. The existing 3D demos remain under **3D 概念示範**. See [the coverage worksheet](docs/tai-tzu-ying/README.md); `npm run check:tai` checks catalog consistency and runs in CI.
+
 ## 動作教練 – Motion coach
 
 - Camera (front/back) or **video upload**. Phone slow-motion clips (60–240 fps) work best for fast strokes; set the slow-motion factor so speeds are computed in real time.
